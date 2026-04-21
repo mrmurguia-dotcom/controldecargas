@@ -2,118 +2,120 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>M2 - Sistema Logístico</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>M2 Picking - Control</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/html5-qrcode"></script>
-  <style>
-    .bg-m2 { background-color: #1e3a5f; }
-    .text-m2 { color: #1e3a5f; }
-    .btn-orange { background-color: #f59e0b; }
-    .btn-orange:hover { background-color: #d97706; }
-    #reader { width: 100%; border-radius: 15px; overflow: hidden; }
-  </style>
 </head>
-<body class="bg-slate-100 min-h-screen">
+<body class="bg-gray-50 min-h-screen">
 
-  <header class="bg-m2 text-white p-4 shadow-lg flex justify-between items-center">
-    <h1 class="font-black italic text-xl">M2 LOGÍSTICA</h1>
-    <div id="status-online" class="h-3 w-3 bg-green-400 rounded-full"></div>
-  </header>
+  <div class="max-w-md mx-auto p-4">
+    <header class="bg-[#1e3a5f] text-white p-6 rounded-2xl shadow-xl mb-6">
+      <h1 class="text-2xl font-black italic">M2 LOGÍSTICA</h1>
+      <p class="text-xs opacity-80 uppercase tracking-widest">Sistema de Control de Picking</p>
+    </header>
 
-  <main class="p-4 max-w-lg mx-auto">
-
-    <section id="importador" class="bg-white rounded-2xl p-6 shadow-sm mb-6 border-t-4 border-orange-500">
-      <h2 class="font-bold text-m2 mb-4 flex items-center gap-2">📦 IMPORTAR CARGA EXCEL</h2>
+    <div class="bg-white p-4 rounded-2xl shadow-sm mb-4 border border-gray-100">
+      <label class="block text-[10px] font-bold text-gray-400 mb-1 tracking-tighter">NÚMERO DE CARGA (XLS)</label>
       <div class="flex gap-2">
-        <input type="number" id="nroCargaImport" placeholder="Ej: 8612" class="flex-1 p-3 border rounded-xl outline-none focus:ring-2 ring-orange-500">
-        <button onclick="importarExcel()" id="btnImport" class="btn-orange text-white px-4 py-3 rounded-xl font-bold shadow-md active:scale-95 transition-all">IMPORTAR</button>
+        <input type="number" id="nroCarga" placeholder="Ej: 8612" class="flex-1 bg-gray-50 border-none p-3 rounded-xl outline-none focus:ring-2 ring-blue-500 font-bold">
+        <button onclick="importar()" id="btnImport" class="bg-orange-500 text-white px-4 py-3 rounded-xl font-bold text-sm shadow-lg shadow-orange-200 active:scale-95 transition-all">IMPORTAR</button>
       </div>
-      <p id="msgImport" class="text-xs mt-2 text-slate-500 font-medium"></p>
-    </section>
+    </div>
 
-    <section class="bg-white rounded-2xl p-6 shadow-sm mb-6 border-t-4 border-blue-500">
-      <h2 class="font-bold text-m2 mb-4 flex items-center gap-2">📷 ESCÁNER DE CONTROL</h2>
-      <div id="reader" class="mb-4"></div>
-      <div id="scanResult" class="text-center p-3 rounded-xl bg-slate-50 font-bold text-lg text-slate-600">Esperando escaneo...</div>
-    </section>
-
-    <section class="bg-white rounded-2xl p-6 shadow-sm border-t-4 border-slate-400">
-      <h2 class="font-bold text-m2 mb-4">🔍 CONSULTAR CP</h2>
-      <div class="flex gap-2 mb-4">
-        <input type="number" id="inputCP" placeholder="N° de CP" class="flex-1 p-3 border rounded-xl outline-none">
-        <button onclick="buscarCP()" class="bg-m2 text-white px-6 py-3 rounded-xl font-bold">VER</button>
+    <div class="bg-white p-4 rounded-2xl shadow-sm mb-4 border border-gray-100">
+      <div id="reader" class="rounded-xl overflow-hidden shadow-inner"></div>
+      <div id="statusControl" class="mt-4 p-4 rounded-xl text-center font-bold bg-gray-50 text-gray-400 border-2 border-dashed border-gray-200">
+        Esperando escaneo...
       </div>
-      <div id="listaItems" class="space-y-3"></div>
-    </section>
+    </div>
 
-  </main>
+    <div id="feedbackBox" class="hidden transform transition-all duration-500 scale-95 opacity-0">
+      <div class="bg-blue-600 text-white p-5 rounded-2xl shadow-xl">
+        <div class="flex justify-between items-start mb-2">
+          <span id="fArt" class="text-2xl font-black"></span>
+          <span class="bg-blue-400/30 px-2 py-1 rounded text-[10px] font-bold uppercase">Detectado</span>
+        </div>
+        <p id="fDesc" class="text-sm opacity-90 mb-4 font-medium leading-tight"></p>
+        
+        <div class="bg-blue-800/40 p-3 rounded-xl">
+          <div class="flex justify-between text-xs font-bold mb-2">
+            <span>PROGRESO DE CARGA</span>
+            <span id="fCant"></span>
+          </div>
+          <div class="h-3 w-full bg-blue-900/50 rounded-full overflow-hidden">
+            <div id="fBar" class="h-full bg-green-400 shadow-[0_0_10px_rgba(74,222,128,0.5)] transition-all duration-500" style="width: 0%"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <script>
-    // --- LÓGICA DE IMPORTACIÓN ---
-    function importarExcel() {
-      const carga = document.getElementById('nroCargaImport').value;
-      if(!carga) return alert("Ingresá un número de carga");
+    const GOOGLE_URL = "https://script.google.com/macros/s/AKfycbxEvbiImOLlbDGkLyIQOjJOq641_3qVZssw1uTSM24C5Hw1NjpiDo48Bjd_0b1IWro/exec";
+    
+    // Función para hablar con Google Apps Script
+    async function callGoogle(payload) {
+      const response = await fetch(GOOGLE_URL, {
+        method: "POST",
+        body: JSON.stringify(payload)
+      });
+      return await response.json();
+    }
+
+    async function importar() {
+      const nro = document.getElementById('nroCarga').value;
+      if(!nro) return alert("Ingresa el número de carga");
       
       const btn = document.getElementById('btnImport');
-      const msg = document.getElementById('msgImport');
-      
       btn.disabled = true;
-      btn.innerText = "PROCESANDO...";
-      msg.innerText = "Buscando archivo en Drive y creando pestaña...";
+      btn.innerText = "...";
 
-      google.script.run
-        .withSuccessHandler(res => {
-          btn.disabled = false;
-          btn.innerText = "IMPORTAR";
-          msg.innerText = "✅ " + res;
-          alert(res);
-        })
-        .withFailureHandler(err => {
-          btn.disabled = false;
-          btn.innerText = "IMPORTAR";
-          msg.innerText = "❌ Error: " + err;
-        })
-        .importarExcelDesdeDrive(carga); // Esta función la agregaremos a tu .gs
+      try {
+        const res = await callGoogle({ action: "importarCarga", nroCarga: nro });
+        alert(res.msg);
+      } catch (e) {
+        alert("Error de conexión. Verifica que la App Web de Google esté publicada.");
+      } finally {
+        btn.disabled = false;
+        btn.innerText = "IMPORTAR";
+      }
     }
 
-    // --- LÓGICA DE ESCÁNER ---
-    function onScanSuccess(decodedText) {
-      document.getElementById('scanResult').innerText = "Validando: " + decodedText;
-      document.getElementById('scanResult').className = "text-orange-500 font-bold text-center p-3";
+    async function onScanSuccess(decodedText) {
+      const nro = document.getElementById('nroCarga').value;
+      if(!nro) return alert("Indica la carga primero.");
+
+      document.getElementById('statusControl').innerText = "Verificando " + decodedText + "...";
       
-      google.script.run
-        .withSuccessHandler(res => {
-          if(res.encontrado) {
-            document.getElementById('scanResult').innerText = "✅ " + res.msg;
-            document.getElementById('scanResult').className = "text-green-600 font-bold text-center p-3 bg-green-50 rounded-xl";
-          } else {
-            document.getElementById('scanResult').innerText = "❌ " + res.msg;
-            document.getElementById('scanResult').className = "text-red-600 font-bold text-center p-3 bg-red-50 rounded-xl";
-          }
-        })
-        .validarItemScan(decodedText); // Esta función la agregaremos a tu .gs
+      try {
+        const res = await callGoogle({ action: "validarEscaneo", barcode: decodedText, nroCarga: nro });
+        
+        const status = document.getElementById('statusControl');
+        const fb = document.getElementById('feedbackBox');
+
+        if(res.success) {
+          status.innerText = "✓ ITEM CORRECTO";
+          status.className = "mt-4 p-4 rounded-xl text-center font-bold bg-green-50 text-green-600 border-2 border-green-200";
+          
+          fb.classList.remove('hidden');
+          setTimeout(() => { fb.classList.add('scale-100', 'opacity-100'); }, 10);
+          
+          document.getElementById('fArt').innerText = res.art;
+          document.getElementById('fDesc').innerText = res.desc;
+          document.getElementById('fCant').innerText = res.actual + " / " + res.total;
+          document.getElementById('fBar').style.width = (res.actual / res.total * 100) + "%";
+        } else {
+          status.innerText = "⚠️ " + res.msg;
+          status.className = "mt-4 p-4 rounded-xl text-center font-bold bg-red-50 text-red-600 border-2 border-red-200";
+        }
+      } catch (e) {
+        console.error(e);
+      }
     }
 
-    let html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 });
-    html5QrcodeScanner.render(onScanSuccess);
-
-    // --- BUSCADOR DE CP (Usa tu función buscarCPChofer) ---
-    function buscarCP() {
-      const cp = document.getElementById('inputCP').value;
-      google.script.run.withSuccessHandler(res => {
-        const div = document.getElementById('listaItems');
-        div.innerHTML = `<p class="text-sm font-bold text-slate-500">Fecha: ${res.fecha}</p>`;
-        res.listaClientes.forEach(cli => {
-          div.innerHTML += `
-            <div class="p-3 border rounded-lg bg-slate-50">
-              <p class="font-bold text-sm">${cli.nombre}</p>
-              <p class="text-xs text-slate-400">${cli.direccion}</p>
-            </div>
-          `;
-        });
-      }).buscarCPChofer(cp);
-    }
+    let scanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 });
+    scanner.render(onScanSuccess);
   </script>
 </body>
 </html>
