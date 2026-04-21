@@ -3,182 +3,210 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>M2 - Sistema de Control Profesional</title>
+    <title>M2 - Control Profesional de Carga</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/html5-qrcode"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        .step-hidden { display: none; }
+        .active-ring { border: 3px solid #1e40af; }
+    </style>
 </head>
-<body class="bg-gray-100 min-h-screen pb-20">
-    <script>window.onbeforeunload = () => "Existen datos sin guardar, ¿desea salir?";</script>
+<body class="bg-slate-100 min-h-screen pb-24">
 
-    <div class="max-w-md mx-auto bg-white min-h-screen shadow-lg flex flex-col">
-        <div class="bg-blue-900 p-4 text-white flex justify-between items-center">
-            <h1 class="font-bold tracking-tighter text-lg">M2 DEPÓSITO</h1>
-            <div id="contadorGlobal" class="text-xs font-mono bg-blue-800 p-2 rounded">Cargando...</div>
-        </div>
-
-        <div id="secCarga" class="p-4 border-b">
-            <div class="flex gap-2">
-                <input type="number" id="nroCarga" placeholder="Nro de Carga" class="flex-1 border p-3 rounded-xl font-bold">
-                <button onclick="iniciarCarga()" class="bg-blue-600 text-white px-6 rounded-xl font-bold">INICIAR</button>
+    <header class="bg-blue-900 text-white p-4 sticky top-0 z-50 shadow-md">
+        <div class="flex justify-between items-center max-w-md mx-auto">
+            <h1 class="font-black text-xl tracking-tighter">SISTEMA M2</h1>
+            <div id="contadores" class="text-[10px] bg-blue-800 px-3 py-1 rounded-lg font-mono leading-tight">
+                ESPERANDO CARGA...
             </div>
         </div>
+    </header>
 
-        <div id="secOp" class="hidden p-4 space-y-4 flex-1">
+    <main class="max-w-md mx-auto p-4 space-y-4">
+        
+        <section id="stepCarga" class="bg-white p-6 rounded-3xl shadow-sm border border-slate-200">
+            <label class="block text-xs font-bold text-slate-400 uppercase mb-2">1. Validar Número de Carga</label>
             <div class="flex gap-2">
-                <input type="text" id="barcode" placeholder="SKU o Cámara..." class="flex-1 border p-3 rounded-xl font-bold bg-yellow-50">
-                <button onclick="abrirCamara()" class="bg-gray-800 text-white px-4 rounded-xl">📷</button>
-                <button onclick="buscarSKU()" class="bg-blue-600 text-white px-4 rounded-xl font-bold">OK</button>
+                <input type="number" id="nroCarga" placeholder="Ej: 8612" class="flex-1 p-4 bg-slate-50 rounded-2xl text-xl font-bold focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <button onclick="iniciar()" id="btnIniciar" class="bg-blue-600 text-white px-6 rounded-2xl font-bold active:scale-95 transition-transform">OK</button>
             </div>
-            <div id="reader" class="hidden rounded-xl overflow-hidden"></div>
+        </section>
 
-            <div id="selectorUM" class="hidden space-y-2 p-3 bg-gray-50 rounded-xl border-2 border-blue-200">
-                <p class="text-xs font-bold text-blue-600 uppercase">Seleccione Variante:</p>
-                <div id="listaUM" class="grid grid-cols-1 gap-2"></div>
+        <section id="stepOperacion" class="step-hidden space-y-4">
+            
+            <div class="bg-white p-4 rounded-3xl shadow-sm border border-slate-200">
+                <label class="block text-xs font-bold text-slate-400 uppercase mb-2">2. Identificar Producto</label>
+                <div class="flex gap-2">
+                    <input type="text" id="barcode" placeholder="Escanear o Tipear SKU" class="flex-1 p-4 bg-yellow-50 rounded-2xl font-bold focus:outline-none">
+                    <button onclick="buscarArticulo()" class="bg-blue-600 text-white px-4 rounded-2xl font-bold">BUSCAR</button>
+                    <button onclick="toggleCamara()" class="bg-slate-800 text-white px-4 rounded-2xl text-xl">📷</button>
+                </div>
+                <div id="reader" class="mt-4 rounded-2xl overflow-hidden hidden"></div>
             </div>
 
-            <div id="secCant" class="hidden bg-white border-2 border-blue-900 rounded-2xl p-4 shadow-xl">
-                <h2 id="dispArt" class="text-xl font-black leading-none"></h2>
-                <p id="dispDesc" class="text-sm text-gray-500 mb-4"></p>
-                <div class="flex gap-2 items-center">
-                    <input type="number" id="inputCant" placeholder="Cantidad" class="flex-1 text-3xl font-bold border-b-4 border-blue-900 focus:outline-none p-2 text-center">
-                    <button onclick="confirmarRegistro()" class="bg-green-600 text-white h-16 px-6 rounded-xl font-black">REGISTRAR</button>
+            <div id="secUM" class="step-hidden bg-blue-50 p-4 rounded-3xl border-2 border-blue-200 animate-pulse">
+                <p class="text-xs font-black text-blue-800 mb-3 uppercase">Seleccione Presentación:</p>
+                <div id="contenedorUM" class="grid grid-cols-1 gap-2"></div>
+            </div>
+
+            <div id="secCantidad" class="step-hidden bg-white p-6 rounded-3xl shadow-xl border-t-4 border-blue-900">
+                <div class="mb-4">
+                    <h2 id="txtArt" class="text-2xl font-black text-slate-900"></h2>
+                    <p id="txtDesc" class="text-sm text-slate-500"></p>
+                </div>
+                <div class="flex gap-3">
+                    <input type="number" id="cantInput" placeholder="Cant" class="w-1/2 p-4 text-3xl font-black bg-slate-100 rounded-2xl text-center focus:ring-4 focus:ring-blue-200 focus:outline-none">
+                    <button onclick="guardar()" class="flex-1 bg-green-600 text-white rounded-2xl font-black text-lg active:bg-green-700">REGISTRAR</button>
                 </div>
             </div>
 
-            <div class="pt-4">
-                <h3 class="text-xs font-bold text-gray-400 mb-2 uppercase">Recientes</h3>
-                <div id="historial" class="space-y-2"></div>
+            <div id="historial" class="space-y-2 pb-10">
+                <p class="text-[10px] font-bold text-slate-400 uppercase px-2">Registros Recientes</p>
             </div>
-        </div>
+        </section>
+    </main>
 
-        <div id="footerActions" class="hidden fixed bottom-0 w-full max-w-md bg-white border-t p-3 grid grid-cols-2 gap-3 shadow-[0_-5px_15px_rgba(0,0,0,0.1)]">
-            <button onclick="verResumen()" class="bg-gray-200 text-gray-800 p-3 rounded-xl font-bold">VER RESUMEN</button>
-            <button onclick="finalizarTodo()" class="bg-red-600 text-white p-3 rounded-xl font-bold">FINALIZAR</button>
-        </div>
-    </div>
+    <footer id="footerApp" class="step-hidden fixed bottom-0 left-0 right-0 p-4 bg-white/80 backdrop-blur-md border-t flex gap-3 max-w-md mx-auto">
+        <button onclick="abrirResumen()" class="flex-1 py-4 bg-slate-200 text-slate-700 rounded-2xl font-bold">VER RESUMEN</button>
+        <button onclick="confirmarFinalizar()" class="flex-1 py-4 bg-red-600 text-white rounded-2xl font-bold">FINALIZAR</button>
+    </footer>
 
-    <div id="modalResumen" class="hidden fixed inset-0 bg-black/80 p-4 z-50 overflow-y-auto">
-        <div class="bg-white rounded-3xl p-6 max-w-sm mx-auto">
-            <div class="flex justify-between items-center mb-4">
-                <h2 class="font-black text-xl">Resumen de Carga</h2>
-                <button onclick="cerrarModal()" class="text-red-500 font-bold">CERRAR</button>
-            </div>
-            <div id="resumenContent" class="text-sm space-y-2"></div>
+    <div id="modalResumen" class="step-hidden fixed inset-0 bg-black/60 z-[60] p-4 flex items-center justify-center">
+        <div class="bg-white w-full max-w-xs rounded-3xl max-h-[80vh] flex flex-col p-6 shadow-2xl">
+            <h3 class="font-black text-xl mb-4">Resumen Carga</h3>
+            <div id="listaResumen" class="flex-1 overflow-y-auto space-y-3 text-sm border-y py-4"></div>
+            <button onclick="cerrarResumen()" class="mt-4 w-full py-3 bg-blue-900 text-white rounded-xl font-bold">CERRAR</button>
         </div>
     </div>
 
     <script>
-        const GOOGLE_URL = "https://script.google.com/macros/s/AKfycbwqMe_5CSD0HJLu1IZriZ-sJwzBkZ1vU6sPhq1wsJ6ko8cnSix0uHKEXss33Ea7FbQ5/exec"; // REEMPLAZAR CON TU URL ACTUALIZADA
-        let cargaActual = "";
-        let articuloSeleccionado = null;
+        const GOOGLE_URL = "https://script.google.com/macros/s/AKfycbwqMe_5CSD0HJLu1IZriZ-sJwzBkZ1vU6sPhq1wsJ6ko8cnSix0uHKEXss33Ea7FbQ5/exec"; 
+        let currentCarga = "";
+        let selectedItem = null;
+        let html5QrScanner = null;
 
-        // Punto 7: Voz
-        function hablar(texto) {
-            const msg = new SpeechSynthesisUtterance(texto);
-            msg.lang = 'es-AR';
-            window.speechSynthesis.speak(msg);
+        // Punto 7: Voz del sistema
+        function decir(frase) {
+            const ut = new SpeechSynthesisUtterance(frase);
+            ut.lang = 'es-AR';
+            window.speechSynthesis.speak(ut);
         }
 
-        async function iniciarCarga() {
-            cargaActual = document.getElementById('nroCarga').value;
-            if(!cargaActual) return alert("Ingrese carga");
-            const res = await fetch(GOOGLE_URL, {method:'POST', body: JSON.stringify({action:'validarCarga', nroCarga: cargaActual})});
-            const data = await res.json();
-            if(data.success) {
-                document.getElementById('secCarga').classList.add('hidden');
-                document.getElementById('secOp').classList.remove('hidden');
-                document.getElementById('footerActions').classList.remove('hidden');
-                actualizarContadores();
-                hablar("Carga inicializada");
-            } else { alert(data.msg); }
+        // Punto 9: Prevenir salida accidental
+        window.onbeforeunload = () => "¿Seguro que desea salir? Se perderá el progreso no finalizado.";
+
+        async function iniciar() {
+            currentCarga = document.getElementById('nroCarga').value;
+            if(!currentCarga) return;
+            
+            const btn = document.getElementById('btnIniciar');
+            btn.innerText = "⏳";
+            
+            try {
+                const res = await fetch(GOOGLE_URL, {method:'POST', body: JSON.stringify({action:'validarCarga', nroCarga: currentCarga})});
+                const data = await res.json();
+                if(data.success) {
+                    document.getElementById('stepCarga').classList.add('step-hidden');
+                    document.getElementById('stepOperacion').classList.remove('step-hidden');
+                    document.getElementById('footerApp').classList.remove('step-hidden');
+                    actualizarContadores();
+                    decir("Carga validada correctamente.");
+                } else { alert(data.msg); }
+            } catch(e) { alert("Error de conexión"); }
+            btn.innerText = "OK";
         }
 
         async function actualizarContadores() {
-            const res = await fetch(GOOGLE_URL, {method:'POST', body: JSON.stringify({action:'obtenerResumen', nroCarga: cargaActual})});
+            const res = await fetch(GOOGLE_URL, {method:'POST', body: JSON.stringify({action:'obtenerResumen', nroCarga: currentCarga})});
             const data = await res.json();
             if(data.success) {
-                let caT = 0, caS = 0, unT = 0, unS = 0;
-                data.resumen.forEach(item => {
-                    if(item.um === "CAJA") { caT += item.total; caS += item.scan; }
-                    else { unT += item.total; unS += item.scan; }
+                let cT=0, cS=0, uT=0, uS=0;
+                data.resumen.forEach(i => {
+                    if(i.um === "CAJA") { cT += i.total; cS += i.scan; }
+                    else { uT += i.total; uS += i.scan; }
                 });
-                document.getElementById('contadorGlobal').innerHTML = `${caS}/${caT} CA | ${unS}/${unT} UN`;
+                document.getElementById('contadores').innerHTML = `${cS}/${cT} CA<br>${uS}/${uT} UN`;
             }
         }
 
-        async function buscarSKU() {
+        async function buscarArticulo() {
             const sku = document.getElementById('barcode').value;
-            const res = await fetch(GOOGLE_URL, {method:'POST', body: JSON.stringify({action:'buscarArticulo', nroCarga: cargaActual, barcode: sku})});
+            if(!sku) return;
+            
+            const res = await fetch(GOOGLE_URL, {method:'POST', body: JSON.stringify({action:'buscarArticulo', nroCarga: currentCarga, barcode: sku})});
             const data = await res.json();
             
             if(data.success) {
-                const lista = document.getElementById('listaUM');
-                lista.innerHTML = '';
+                const cont = document.getElementById('contenedorUM');
+                cont.innerHTML = '';
                 data.opciones.forEach(op => {
-                    const btn = document.createElement('button');
-                    btn.className = "p-3 bg-blue-100 rounded-lg text-left font-bold border border-blue-300";
-                    btn.innerText = `${op.um} (Faltan: ${op.total - op.actual})`;
-                    btn.onclick = () => seleccionarUM(op);
-                    lista.appendChild(btn);
+                    const b = document.createElement('button');
+                    b.className = "w-full p-4 bg-white border border-blue-200 rounded-2xl font-bold text-blue-900 flex justify-between shadow-sm active:bg-blue-100";
+                    b.innerHTML = `<span>${op.um}</span> <span class="text-xs text-blue-400">Faltan: ${op.total - op.actual}</span>`;
+                    b.onclick = () => prepararRegistro(op);
+                    cont.appendChild(b);
                 });
-                document.getElementById('selectorUM').classList.remove('hidden');
-                hablar("Artículo encontrado. Elija unidad de medida");
-            } else { alert(data.msg); }
+                document.getElementById('secUM').classList.remove('step-hidden');
+                document.getElementById('secCantidad').classList.add('step-hidden');
+                decir("Artículo " + data.opciones[0].sku + ". Seleccione unidad.");
+            } else { alert(data.msg); decir("Sku no encontrado."); }
         }
 
-        function seleccionarUM(op) {
-            articuloSeleccionado = op;
-            document.getElementById('dispArt').innerText = op.sku;
-            document.getElementById('dispDesc').innerText = op.desc + " - " + op.um;
-            document.getElementById('selectorUM').classList.add('hidden');
-            document.getElementById('secCant').classList.remove('hidden');
-            document.getElementById('inputCant').focus();
+        function prepararRegistro(item) {
+            selectedItem = item;
+            document.getElementById('txtArt').innerText = item.sku;
+            document.getElementById('txtDesc').innerText = `${item.desc} (${item.um})`;
+            document.getElementById('secUM').classList.add('step-hidden');
+            document.getElementById('secCantidad').classList.remove('step-hidden');
+            document.getElementById('cantInput').focus();
         }
 
-        async function confirmarRegistro() {
-            const cant = document.getElementById('inputCant').value;
+        async function guardar() {
+            const cant = document.getElementById('cantInput').value;
             if(!cant || cant <= 0) return;
 
             const res = await fetch(GOOGLE_URL, {method:'POST', body: JSON.stringify({
-                action:'registrarCantidad', 
-                nroCarga: cargaActual, 
-                barcode: articuloSeleccionado.sku,
-                indexFila: articuloSeleccionado.index,
-                cantidad: cant
+                action:'registrarCantidad', nroCarga: currentCarga, barcode: selectedItem.sku, 
+                indexFila: selectedItem.index, cantidad: cant
             })});
             const data = await res.json();
 
             if(data.success) {
-                hablar(`Registrado ${articuloSeleccionado.sku}, cantidad ${cant}. ${data.msg}`);
-                agregarHistorial(articuloSeleccionado.sku, cant, articuloSeleccionado.um);
-                document.getElementById('secCant').classList.add('hidden');
+                decir(`Registrado SKU ${selectedItem.sku}, cantidad ${cant}.`);
+                addHistorial(selectedItem.sku, cant, selectedItem.um);
+                document.getElementById('secCantidad').classList.add('step-hidden');
                 document.getElementById('barcode').value = '';
                 actualizarContadores();
             } else { alert(data.msg); }
         }
 
-        function agregarHistorial(sku, cant, um) {
-            const hist = document.getElementById('historial');
-            const item = `<div class="bg-white p-2 rounded border-l-4 border-green-500 shadow-sm text-xs"><b>${sku}</b>: ${cant} ${um}</div>`;
-            hist.innerHTML = item + hist.innerHTML;
+        function addHistorial(sku, c, um) {
+            const h = document.getElementById('historial');
+            const d = document.createElement('div');
+            d.className = "bg-white p-3 rounded-xl border-l-4 border-green-500 text-xs flex justify-between";
+            d.innerHTML = `<span><b>${sku}</b> (${um})</span> <span class="font-bold text-green-700">+${c}</span>`;
+            h.prepend(d);
         }
 
-        async function verResumen() {
-            const res = await fetch(GOOGLE_URL, {method:'POST', body: JSON.stringify({action:'obtenerResumen', nroCarga: cargaActual})});
+        async function abrirResumen() {
+            const res = await fetch(GOOGLE_URL, {method:'POST', body: JSON.stringify({action:'obtenerResumen', nroCarga: currentCarga})});
             const data = await res.json();
-            let html = "";
+            const list = document.getElementById('listaResumen');
+            list.innerHTML = '';
             data.resumen.forEach(i => {
-                html += `<div class="border-b py-1"><b>${i.sku}</b> - ${i.desc}<br>${i.scan}/${i.total} ${i.um}</div>`;
+                const div = document.createElement('div');
+                div.className = "p-2 bg-slate-50 rounded-lg";
+                div.innerHTML = `<div class="font-bold">${i.sku}</div><div class="text-[10px] text-slate-500">${i.desc}</div><div class="flex justify-between font-mono font-bold mt-1"><span>${i.um}</span><span>${i.scan}/${i.total}</span></div>`;
+                list.appendChild(div);
             });
-            document.getElementById('resumenContent').innerHTML = html;
-            document.getElementById('modalResumen').classList.remove('hidden');
+            document.getElementById('modalResumen').classList.remove('step-hidden');
         }
 
-        function cerrarModal() { document.getElementById('modalResumen').classList.add('hidden'); }
+        function cerrarResumen() { document.getElementById('modalResumen').classList.add('step-hidden'); }
 
-        function finalizarTodo() {
-            if(confirm("¿Desea finalizar y generar PDF? Se borrará la pestaña del sheet.")) {
+        function confirmarFinalizar() {
+            if(confirm("¿Seguro que desea finalizar el conteo? Se generará un reporte PDF y se cerrará el proceso.")) {
                 generarPDF();
             }
         }
@@ -186,18 +214,45 @@
         async function generarPDF() {
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF();
-            const res = await fetch(GOOGLE_URL, {method:'POST', body: JSON.stringify({action:'finalizarCarga', nroCarga: cargaActual})});
+            const res = await fetch(GOOGLE_URL, {method:'POST', body: JSON.stringify({action:'finalizarCarga', nroCarga: currentCarga})});
             const data = await res.json();
             
-            doc.text("Reporte de Carga: " + cargaActual, 10, 10);
-            let y = 20;
-            data.reporte.forEach(f => {
-                doc.text(`${f[2]} - ${f[3]} - ${f[5]} - Escaneado: ${f[7] || 0}/${f[6]}`, 10, y);
-                y += 7;
+            doc.setFontSize(18); doc.text("CONTROL DE CARGA M2 - REPORTE", 10, 20);
+            doc.setFontSize(12); doc.text("Número de Carga: " + currentCarga, 10, 30);
+            doc.text("Fecha: " + new Date().toLocaleString(), 10, 37);
+            
+            let y = 50;
+            doc.setFontSize(10);
+            doc.text("SKU | DESCRIPCION | UM | CANT | SCAN | DIF", 10, y);
+            y += 5;
+            
+            data.reporte.slice(1).forEach(f => {
+                const dif = (parseInt(f[6]) || 0) - (parseInt(f[7]) || 0);
+                doc.text(`${f[2]} | ${f[3].substring(0,15)} | ${f[5]} | ${f[6]} | ${f[7]||0} | ${dif}`, 10, y);
+                y += 6;
+                if(y > 280) { doc.addPage(); y = 20; }
             });
-            doc.save(`Carga_${cargaActual}.pdf`);
-            alert("Reporte guardado. La aplicación se reiniciará.");
-            window.location.reload();
+            
+            doc.save(`REPORTE_M2_CARGA_${currentCarga}.pdf`);
+            decir("Proceso finalizado. Reporte descargado.");
+            setTimeout(() => location.reload(), 2000);
+        }
+
+        function toggleCamara() {
+            const r = document.getElementById('reader');
+            if(r.classList.contains('hidden')) {
+                r.classList.remove('hidden');
+                html5QrScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 });
+                html5QrScanner.render(txt => {
+                    document.getElementById('barcode').value = txt;
+                    r.classList.add('hidden');
+                    html5QrScanner.clear();
+                    buscarArticulo();
+                });
+            } else {
+                r.classList.add('hidden');
+                if(html5QrScanner) html5QrScanner.clear();
+            }
         }
     </script>
 </body>
