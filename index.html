@@ -56,11 +56,11 @@
     const GOOGLE_URL = "https://script.google.com/macros/s/AKfycbxEvbiImOLlbDGkLyIQOjJOq641_3qVZssw1uTSM24C5Hw1NjpiDo48Bjd_0b1IWro/exec";
     
     // Función optimizada para evitar CORS enviando como text/plain
-    async function callGoogle(payload) {
+   async function callGoogle(payload) {
   try {
-    const response = await fetch(GOOGLE_URL, {
+    // Usamos 'no-cors' para que el navegador no bloquee el envío
+    await fetch(GOOGLE_URL, {
       method: "POST",
-      // CAMBIO CLAVE: Cambiamos 'cors' por 'no-cors' pero manteniendo el envío de texto
       mode: "no-cors", 
       headers: {
         "Content-Type": "text/plain;charset=utf-8", 
@@ -68,9 +68,8 @@
       body: JSON.stringify(payload)
     });
     
-    // Con no-cors no podemos leer res.json(), así que para pruebas de importación
-    // simplemente asumiremos que si llegó aquí, el comando se envió.
-    return { success: true, msg: "Comando enviado al servidor" };
+    // Con no-cors no podemos leer la respuesta, así que damos un mensaje positivo
+    return { success: true, msg: "Comando enviado. Revisa tu Google Sheet en unos segundos." };
     
   } catch (error) {
     console.error("Error en conexión:", error);
