@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Supervisor - Carga de Datos M2</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; }
+        .drop-zone {
+            border: 2px dashed #cbd5e1;
+            transition: all 0.3s ease;
+        }
+        .drop-zone.drag-over {
+            border-color: #3b82f6;
+            background-color: #eff6ff;
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen p-4">
+
+    <div class="bg-white p-8 rounded-3xl shadow-xl w-full max-w-2xl">
+        <div class="flex justify-between items-center mb-8">
+            <h1 class="text-2xl font-bold text-blue-900 italic uppercase">Carga de Reparto M2</h1>
+            <img src="https://mrmurguia.com/logo.png" alt="Logo" class="h-8"> </div>
+
+        <div class="mb-6">
+            <label class="block text-sm font-bold text-blue-900 uppercase mb-2">Fecha de Reparto:</label>
+            <input type="date" id="fecha" class="w-full p-3 border border-blue-200 rounded-xl text-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+
+        <div id="dropZone" class="drop-zone rounded-2xl p-12 text-center cursor-pointer mb-6">
+            <div id="idleContent">
+                <div class="flex justify-center mb-4">
+                    <svg class="w-12 h-12 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="浸M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path>
+                    </svg>
+                </div>
+                <p class="text-blue-900 font-semibold uppercase">Arrastrá los Excel o hacé click aquí</p>
+                <p class="text-gray-400 text-sm mt-2 italic">El nombre del archivo será el Nro. de Carga</p>
+            </div>
+            
+            <div id="uploadingContent" class="hidden">
+                <p id="statusText" class="text-blue-900 font-bold mb-4 italic italic">Procesando archivo...</p>
+                <div class="w-full bg-gray-200 rounded-full h-2.5">
+                    <div id="progressBar" class="bg-blue-600 h-2.5 rounded-full" style="width: 0%"></div>
+                </div>
+            </div>
+        </div>
+
+        <input type="file" id="fileInput" class="hidden" accept=".xlsx, .xls">
+
+        <div id="log" class="text-xs text-gray-500 mt-4 p-3 bg-gray-50 rounded-lg hidden"></div>
+    </div>
+
+    <script>
+        // URL DE TU IMPLEMENTACIÓN (Proporcionada por el usuario)
+        const GOOGLE_URL = "https://script.google.com/macros/s/AKfycbwqMe_5CSD0HJLu1IZriZ-sJwzBkZ1vU6sPhq1wsJ6ko8cnSix0uHKEXss33Ea7FbQ5/exec";
+
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        const idleContent = document.getElementById('idleContent');
+        const uploadingContent = document.getElementById('uploadingContent');
+        const progressBar = document.getElementById('progressBar');
+        const statusText = document.getElementById('statusText');
+
+        // Configurar fecha de hoy por defecto
+        document.getElementById('fecha').valueAsDate = new Date();
+
+        // Eventos de Drag & Drop
+        dropZone.onclick = () => fileInput.click();
+        
+        dropZone.ondragover = (e) => { e.preventDefault(); dropZone.classList.add('drag-over'); };
+        dropZone.ondragleave = () => dropZone.classList.remove('drag-over');
+        
+        dropZone.ondrop = (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('drag-over');
+            if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+        };
+
+        fileInput.onchange = (e) => {
+            if (e.target.files.length) handleFile(e.target.files[0]);
+        };
+
+        function handleFile(file) {
+            // Mostrar estado de carga
+            idleContent.classList.add('hidden');
+            uploadingContent.classList.remove('hidden');
+            statusText.innerText = `Subiendo: ${file.name}...`;
+            progressBar.style.width = '30%';
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const base64Data = e.target.result.split(',')[1];
+                
+                progressBar.style.width = '60%';
+                
+                // Enviar a Google Apps Script
+                fetch(GOOGLE_URL, {
+                    method: 'POST',
+                    mode: 'no-cors', // Importante para evitar bloqueos CORS en envío
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'importarExcel',
+                        nombreArchivo: file.name,
+                        archivoData: base64Data
+                    })
+                })
+                .then(() => {
+                    progressBar.style.width = '100%';
+                    statusText.innerText = "¡CARGA COMPLETADA EXITOSAMENTE!";
+                    statusText.classList.add('text-green-600');
+                    
+                    setTimeout(() => {
+                        alert("La carga se procesó. Verifica tu Google Sheet 'Cerebro_App'.");
+                        resetUI();
+                    }, 1000);
+                })
+                .catch(err => {
+                    console.error(err);
+                    alert("Error de conexión. Revisa la consola.");
+                    resetUI();
+                });
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function resetUI() {
+            idleContent.classList.remove('hidden');
+            uploadingContent.classList.add('hidden');
+            progressBar.style.width = '0%';
+            statusText.classList.remove('text-green-600');
+            fileInput.value = '';
+        }
+    </script>
+</body>
+</html>
