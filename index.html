@@ -3,123 +3,164 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Operario - Control de Carga</title>
+    <title>Operario M2 - Control por Pasos</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/html5-qrcode"></script>
     <style>
         body { background-color: #f3f4f6; font-family: sans-serif; }
-        .status-card { transition: all 0.3s ease; }
-        .btn-scan { background-color: #1e3a8a; color: white; }
-        .btn-scan:active { transform: scale(0.95); }
+        .btn-primary { background-color: #1e3a8a; color: white; transition: 0.2s; }
+        .btn-primary:active { transform: scale(0.95); }
+        .hidden-section { display: none; }
     </style>
 </head>
 <body class="min-h-screen flex items-center justify-center p-4">
 
-    <div class="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden">
-        <div class="bg-blue-900 p-6 text-white text-center">
-            <h1 class="text-xl font-bold uppercase tracking-widest">Control de Carga M2</h1>
-            <p class="text-blue-200 text-sm italic">Operaciones de Depósito</p>
+    <div class="bg-white w-full max-w-md rounded-3xl shadow-xl overflow-hidden">
+        <div class="bg-blue-900 p-4 text-white text-center">
+            <h1 class="text-xl font-bold tracking-widest">CONTROL M2</h1>
         </div>
 
         <div class="p-6 space-y-6">
-            <div class="space-y-2">
-                <label class="text-xs font-bold text-gray-500 uppercase">Número de Carga (Pestaña)</label>
-                <input type="number" id="nroCarga" placeholder="Ej: 8612" 
-                    class="w-full p-4 bg-gray-100 border-2 border-transparent rounded-2xl focus:border-blue-500 focus:outline-none text-lg font-bold">
-            </div>
-
-            <div class="space-y-2">
-                <label class="text-xs font-bold text-gray-500 uppercase">Código de Artículo (ART)</label>
-                <div class="flex gap-2">
-                    <input type="text" id="barcode" placeholder="Escanee o tipee ART" 
-                        class="flex-1 p-4 bg-gray-100 border-2 border-transparent rounded-2xl focus:border-blue-500 focus:outline-none text-lg font-semibold">
-                    <button onclick="validarProducto()" class="btn-scan px-6 rounded-2xl font-bold">OK</button>
+            
+            <div id="step1">
+                <label class="text-xs font-bold text-gray-500 uppercase">1. Número de Carga</label>
+                <div class="flex gap-2 mt-1">
+                    <input type="number" id="nroCarga" placeholder="Ej: 8612" class="flex-1 p-3 bg-gray-100 rounded-xl font-bold text-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <button onclick="validarCarga()" class="btn-primary px-6 rounded-xl font-bold" id="btnCarga">OK</button>
                 </div>
             </div>
 
-            <hr class="border-gray-100">
+            <div id="step2" class="hidden-section pt-4 border-t border-gray-200">
+                <label class="text-xs font-bold text-gray-500 uppercase">2. Buscar Artículo</label>
+                <div class="flex gap-2 mt-1">
+                    <input type="text" id="barcode" placeholder="Tipear SKU..." class="flex-1 p-3 bg-gray-100 rounded-xl font-bold text-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <button onclick="buscarArticulo()" class="btn-primary px-4 rounded-xl font-bold">OK</button>
+                    <button onclick="abrirCamara()" class="bg-gray-800 text-white px-4 rounded-xl">📷</button>
+                </div>
+                <div id="reader" class="w-full mt-4 rounded-xl overflow-hidden hidden-section"></div>
+            </div>
 
-            <div id="resultado" class="status-card hidden p-6 rounded-2xl text-center">
-                <h2 id="resArt" class="text-2xl font-black mb-1"></h2>
-                <p id="resDesc" class="text-gray-600 text-sm mb-4 leading-tight"></p>
+            <div id="step3" class="hidden-section p-4 bg-blue-50 border border-blue-100 rounded-2xl">
+                <p class="text-xs font-bold text-green-600 uppercase mb-2">✓ SKU ENCONTRADO EN LA CARGA</p>
+                <h2 id="resArt" class="text-2xl font-black text-blue-900 leading-none"></h2>
+                <p id="resDesc" class="text-gray-600 text-sm mb-4"></p>
                 
-                <div class="flex justify-center items-baseline gap-2">
-                    <span id="resCant" class="text-5xl font-black text-blue-900">0</span>
-                    <span class="text-gray-400 text-xl">/</span>
-                    <span id="resTotal" class="text-gray-400 text-xl font-bold">0</span>
+                <label class="text-xs font-bold text-gray-500 uppercase">3. Cantidad a cargar (Faltan: <span id="resFalta"></span>)</label>
+                <div class="flex gap-2 mt-1">
+                    <input type="number" id="cantidad" placeholder="Cant" class="w-24 p-3 bg-white border border-gray-300 rounded-xl font-bold text-xl text-center focus:outline-none">
+                    <button onclick="dictarCantidad()" class="bg-red-500 text-white px-4 rounded-xl font-bold active:scale-95">🎤 Hablar</button>
+                    <button onclick="guardarCantidad()" class="btn-primary flex-1 rounded-xl font-bold">GUARDAR</button>
                 </div>
-                <p class="text-xs uppercase font-bold text-gray-400 mt-2">Cantidad Confirmada</p>
             </div>
 
-            <div id="errorMsg" class="hidden p-4 bg-red-100 text-red-700 rounded-2xl text-center font-bold text-sm">
-            </div>
-        </div>
-        
-        <div class="p-4 bg-gray-50 text-center">
-            <p class="text-[10px] text-gray-400 uppercase tracking-widest font-bold">Sistema de Gestión M2 - 2026</p>
+            <div id="msgBox" class="hidden-section p-3 rounded-xl text-center font-bold text-sm"></div>
+
         </div>
     </div>
 
     <script>
-        // URL DE TU IMPLEMENTACIÓN ACTUALIZADA
         const GOOGLE_URL = "https://script.google.com/macros/s/AKfycbwqMe_5CSD0HJLu1IZriZ-sJwzBkZ1vU6sPhq1wsJ6ko8cnSix0uHKEXss33Ea7FbQ5/exec";
+        let html5QrcodeScanner;
 
-        async function validarProducto() {
+        function showMsg(text, type = 'error') {
+            const box = document.getElementById('msgBox');
+            box.innerText = text;
+            box.className = `p-3 rounded-xl text-center font-bold text-sm mt-4 ${type === 'error' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`;
+            box.style.display = 'block';
+            setTimeout(() => box.style.display = 'none', 4000);
+        }
+
+        async function validarCarga() {
+            const btn = document.getElementById('btnCarga');
+            const nroCarga = document.getElementById('nroCarga').value;
+            if(!nroCarga) return showMsg("Ingrese un número de carga");
+
+            btn.innerText = "...";
+            try {
+                const res = await fetch(GOOGLE_URL, { method: 'POST', body: JSON.stringify({ action: 'validarCarga', nroCarga }) });
+                const data = await res.json();
+                if(data.success) {
+                    document.getElementById('nroCarga').disabled = true;
+                    document.getElementById('step2').style.display = 'block';
+                    showMsg("Carga Validada", "success");
+                } else {
+                    showMsg(data.msg);
+                }
+            } catch(e) { showMsg("Error de conexión"); }
+            btn.innerText = "OK";
+        }
+
+        async function buscarArticulo() {
             const nroCarga = document.getElementById('nroCarga').value;
             const barcode = document.getElementById('barcode').value;
-            const resDiv = document.getElementById('resultado');
-            const errorDiv = document.getElementById('errorMsg');
-
-            if (!nroCarga || !barcode) {
-                mostrarError("Complete carga y código");
-                return;
-            }
-
-            // Limpiar estados
-            resDiv.classList.add('hidden');
-            errorDiv.classList.add('hidden');
+            if(!barcode) return showMsg("Ingrese o escanee SKU");
 
             try {
-                const response = await fetch(GOOGLE_URL, {
-                    method: 'POST',
-                    body: JSON.stringify({
-                        action: 'validarEscaneo',
-                        nroCarga: nroCarga,
-                        barcode: barcode
-                    })
-                });
-
-                const data = await response.json();
-
-                if (data.success) {
+                const res = await fetch(GOOGLE_URL, { method: 'POST', body: JSON.stringify({ action: 'buscarArticulo', nroCarga, barcode }) });
+                const data = await res.json();
+                
+                if(data.success) {
                     document.getElementById('resArt').innerText = data.art;
                     document.getElementById('resDesc').innerText = data.desc;
-                    document.getElementById('resCant').innerText = data.actual;
-                    document.getElementById('resTotal').innerText = data.total;
-                    
-                    resDiv.classList.remove('hidden');
-                    resDiv.classList.add('bg-green-50');
-                    document.getElementById('barcode').value = ''; // Limpiar para el próximo
+                    document.getElementById('resFalta').innerText = data.faltante;
+                    document.getElementById('step3').style.display = 'block';
+                    document.getElementById('cantidad').value = '';
+                    if(html5QrcodeScanner) html5QrcodeScanner.clear(); // Apaga cámara si estaba prendida
+                } else {
+                    showMsg(data.msg);
+                    document.getElementById('step3').style.display = 'none';
+                }
+            } catch(e) { showMsg("Error de conexión"); }
+        }
+
+        async function guardarCantidad() {
+            const nroCarga = document.getElementById('nroCarga').value;
+            const barcode = document.getElementById('barcode').value;
+            const cantidad = document.getElementById('cantidad').value;
+
+            if(!cantidad || cantidad <= 0) return showMsg("Ingrese una cantidad válida");
+
+            try {
+                const res = await fetch(GOOGLE_URL, { method: 'POST', body: JSON.stringify({ action: 'registrarCantidad', nroCarga, barcode, cantidad }) });
+                const data = await res.json();
+                
+                if(data.success) {
+                    showMsg(data.msg, "success");
+                    // Resetear para el siguiente artículo
+                    document.getElementById('step3').style.display = 'none';
+                    document.getElementById('barcode').value = '';
                     document.getElementById('barcode').focus();
                 } else {
-                    mostrarError(data.msg);
+                    showMsg(data.msg);
                 }
-            } catch (e) {
-                mostrarError("Error de conexión con el servidor");
+            } catch(e) { showMsg("Error de conexión"); }
+        }
+
+        function abrirCamara() {
+            document.getElementById('reader').style.display = 'block';
+            html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 });
+            html5QrcodeScanner.render((decodedText) => {
+                document.getElementById('barcode').value = decodedText;
+                html5QrcodeScanner.clear();
+                document.getElementById('reader').style.display = 'none';
+                buscarArticulo(); // Autoejecuta la búsqueda al escanear
+            });
+        }
+
+        function dictarCantidad() {
+            if ('webkitSpeechRecognition' in window) {
+                const recognition = new webkitSpeechRecognition();
+                recognition.lang = 'es-AR';
+                recognition.start();
+                recognition.onresult = function(event) {
+                    const numero = parseInt(event.results[0][0].transcript.replace(/\D/g,''));
+                    if(!isNaN(numero)) document.getElementById('cantidad').value = numero;
+                    else showMsg("No se entendió el número");
+                };
+            } else {
+                showMsg("Tu navegador no soporta dictado por voz");
             }
         }
-
-        function mostrarError(msg) {
-            const errorDiv = document.getElementById('errorMsg');
-            errorDiv.innerText = msg;
-            errorDiv.classList.remove('hidden');
-            // Vibración simple si el dispositivo lo permite
-            if (window.navigator.vibrate) window.navigator.vibrate(200);
-        }
-
-        // Permitir dar "Enter" en el input del código
-        document.getElementById('barcode').addEventListener('keypress', function (e) {
-            if (e.key === 'Enter') validarProducto();
-        });
     </script>
 </body>
 </html>
