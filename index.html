@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SISTEMA M2 - CONTROL</title>
+    <title>CONTROL DE CARGAS - M2</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/html5-qrcode"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -15,10 +15,13 @@
 <body class="bg-slate-100 min-h-screen pb-24">
 
     <header class="bg-blue-900 text-white p-4 sticky top-0 z-50 shadow-md">
-        <div class="flex justify-between items-center max-w-md mx-auto">
-            <h1 class="font-black text-xl">SISTEMA M2</h1>
-            <div id="contadores" class="text-[10px] bg-blue-800 px-3 py-1 rounded-lg font-mono leading-tight text-right">
-                ESPERANDO CARGA...
+        <div class="max-w-md mx-auto flex justify-between items-center">
+            <div>
+                <h1 class="font-black text-xl leading-tight">CONTROL DE CARGAS</h1>
+                <p class="text-[10px] text-blue-300 font-bold uppercase tracking-wider">Creado por M2 Consultoría Digital</p>
+            </div>
+            <div id="contadores" class="text-[10px] bg-blue-800 px-3 py-1 rounded-lg font-mono text-right">
+                INICIAR...
             </div>
         </div>
     </header>
@@ -28,15 +31,15 @@
         <section id="stepCarga" class="bg-white p-6 rounded-3xl shadow-sm border border-slate-200">
             <div class="space-y-4">
                 <div>
-                    <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Operador</label>
+                    <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Verificador</label>
                     <select id="operadorSelect" onchange="verificarOperador()" class="w-full p-4 bg-slate-50 rounded-2xl font-bold focus:outline-none">
-                        <option value="">Seleccione...</option>
+                        <option value="">Seleccione Verificador...</option>
                         <option value="Omar Dubi">Omar Dubi</option>
                         <option value="Jose Servin">Jose Servin</option>
                         <option value="Maxi Murray">Maxi Murray</option>
                         <option value="Otro">Otro...</option>
                     </select>
-                    <input type="text" id="operadorOtro" placeholder="Escriba el nombre..." class="step-hidden w-full mt-2 p-4 bg-slate-50 rounded-2xl font-bold focus:outline-none border border-slate-200">
+                    <input type="text" id="operadorOtro" placeholder="Nombre del verificador..." class="step-hidden w-full mt-2 p-4 bg-slate-50 rounded-2xl font-bold focus:outline-none border border-slate-200">
                 </div>
 
                 <div>
@@ -54,7 +57,7 @@
                 <label class="block text-xs font-bold text-slate-400 uppercase mb-2">Identificar Producto</label>
                 <div class="flex gap-2">
                     <input type="text" id="barcode" placeholder="SKU" class="flex-1 p-4 bg-yellow-50 rounded-2xl font-bold focus:outline-none">
-                    <button onclick="buscarArticulo()" class="bg-blue-600 text-white px-4 rounded-2xl font-bold">OK</button>
+                    <button onclick="buscarArticulo()" class="bg-blue-600 text-white px-4 rounded-2xl font-bold text-sm">OK</button>
                     <button onclick="toggleCamara()" class="bg-slate-800 text-white px-4 rounded-2xl text-xl">📷</button>
                 </div>
                 <div id="reader" class="mt-4 rounded-2xl overflow-hidden hidden"></div>
@@ -79,8 +82,8 @@
     </main>
 
     <footer id="footerApp" class="step-hidden fixed bottom-0 left-0 right-0 p-4 bg-white/90 border-t flex gap-3 max-w-md mx-auto z-40">
-        <button onclick="abrirResumen()" class="flex-1 py-4 bg-slate-200 text-slate-700 rounded-2xl font-bold">VER RESUMEN</button>
-        <button onclick="confirmarFinalizar()" class="flex-1 py-4 bg-red-600 text-white rounded-2xl font-bold">FINALIZAR</button>
+        <button onclick="abrirResumen()" class="flex-1 py-4 bg-slate-200 text-slate-700 rounded-2xl font-bold text-xs">VER RESUMEN</button>
+        <button onclick="confirmarFinalizar()" class="flex-1 py-4 bg-red-600 text-white rounded-2xl font-bold text-xs">FINALIZAR CARGA</button>
     </footer>
 
     <div id="modalResumen" class="step-hidden fixed inset-0 bg-black/60 z-[100] p-4 flex items-center justify-center">
@@ -92,14 +95,13 @@
     </div>
 
     <script>
-        // ¡¡¡ REEMPLAZAR CON TU NUEVA URL !!!
         const GOOGLE_URL = "https://script.google.com/macros/s/AKfycbzKjFlPsGUOP1QgLr2FkFvodke-czEuXRmhoLyYmj7a2bgp4ZGEiHNSek6EUhIteEk/exec"; 
         
         let currentCarga = "";
         let nombreOp = "";
         let selectedItem = null;
+        let maleVoice = null;
 
-        // Sonidos nativos del navegador (Punto 2)
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         function playBeep(type) {
             if(audioCtx.state === 'suspended') audioCtx.resume();
@@ -117,18 +119,15 @@
             }
         }
 
-        // Voz Masculina (Punto 7)
-        let maleVoice = null;
         window.speechSynthesis.onvoiceschanged = () => {
             const voces = window.speechSynthesis.getVoices();
-            // Busca voces en español que suenen masculinas (Pablo, Diego, Jorge, male)
             maleVoice = voces.find(v => v.lang.includes('es') && /pablo|diego|jorge|male|hombre/i.test(v.name));
         };
 
         function decir(t) { 
             const u = new SpeechSynthesisUtterance(t); 
             u.lang = 'es-AR'; 
-            if(maleVoice) u.voice = maleVoice; // Usa voz de hombre si la encuentra
+            if(maleVoice) u.voice = maleVoice;
             window.speechSynthesis.speak(u); 
         }
 
@@ -142,8 +141,7 @@
             const sel = document.getElementById('operadorSelect').value;
             nombreOp = sel === "Otro" ? document.getElementById('operadorOtro').value : sel;
             currentCarga = document.getElementById('nroCarga').value;
-            
-            if(!nombreOp || !currentCarga) return alert("Complete nombre y carga.");
+            if(!nombreOp || !currentCarga) return alert("Complete los datos.");
             
             const btn = document.getElementById('btnIniciar');
             btn.innerText = "⏳";
@@ -160,39 +158,31 @@
             btn.innerText = "OK";
         }
 
-        async function actualizarContadores() {
-            try {
-                const res = await fetch(GOOGLE_URL, {method:'POST', body: JSON.stringify({action:'obtenerResumen', nroCarga: currentCarga})});
-                const data = await res.json();
-                if(data.success) {
-                    let cT=0, cS=0, uT=0, uS=0;
-                    data.resumen.forEach(i => {
-                        if(i.um === "CAJA") { cT += i.total; cS += i.scan; }
-                        else { uT += i.total; uS += i.scan; }
-                    });
-                    document.getElementById('contadores').innerHTML = `${cS}/${cT} CA<br>${uS}/${uT} UN`;
-                }
-            } catch(e) {}
-        }
-
         async function buscarArticulo() {
             const sku = document.getElementById('barcode').value;
             if(!sku) return;
-            decir("SKU " + sku); // PUNTO 1: Dice el número
+            decir("SKU " + sku);
             
             const res = await fetch(GOOGLE_URL, {method:'POST', body: JSON.stringify({action:'buscarArticulo', nroCarga: currentCarga, barcode: sku})});
             const data = await res.json();
+            
             if(data.success) {
-                const cont = document.getElementById('contenedorUM');
-                cont.innerHTML = '';
-                data.opciones.forEach(op => {
-                    const b = document.createElement('button');
-                    b.className = "w-full p-4 bg-white border border-blue-200 rounded-2xl font-black text-xl shadow-sm text-center";
-                    b.innerHTML = `${op.um}`; // PUNTO 2: Quitado el "faltan"
-                    b.onclick = () => prepararRegistro(op);
-                    cont.appendChild(b);
-                });
-                document.getElementById('secUM').classList.remove('step-hidden');
+                if(data.opciones.length === 1) {
+                    // PUNTO 1: Autoselección si hay solo una UM
+                    decir(data.opciones[0].um);
+                    prepararRegistro(data.opciones[0]);
+                } else {
+                    const cont = document.getElementById('contenedorUM');
+                    cont.innerHTML = '';
+                    data.opciones.forEach(op => {
+                        const b = document.createElement('button');
+                        b.className = "w-full p-4 bg-white border border-blue-200 rounded-2xl font-black text-xl text-center";
+                        b.innerHTML = `${op.um}`;
+                        b.onclick = () => { decir(op.um); prepararRegistro(op); };
+                        cont.appendChild(b);
+                    });
+                    document.getElementById('secUM').classList.remove('step-hidden');
+                }
             } else { alert(data.msg); }
         }
 
@@ -207,66 +197,69 @@
 
         async function guardar() {
             const cant = parseInt(document.getElementById('cantInput').value);
-            if(!cant || cant <= 0) return;
+            if(!cant) return;
 
-            // PUNTO 2: Lógica de Diferencia y Sonidos
             const finalEsperado = selectedItem.total;
             const finalEscaneado = selectedItem.actual + cant;
 
+            // PUNTO 2: Lógica de sonidos y avisos sin bloqueos
             if (finalEscaneado !== finalEsperado) {
                 playBeep('err');
                 decir(`Diferencia. La carga pide ${finalEsperado}.`);
-                const msg = `ATENCIÓN: La carga pide ${finalEsperado} ${selectedItem.um}.\nUsted está registrando un total acumulado de ${finalEscaneado}.\n\n¿Desea ingresar con diferencia?`;
-                if(!confirm(msg)) return; // Si el usuario cancela, no guarda.
+                if(!confirm(`Atención: La carga pide ${finalEsperado}.\nUsted registra ${finalEscaneado}.\n\n¿Desea continuar?`)) return;
             } else {
                 playBeep('ok');
-                alert("¡OK con Carga!");
+                decir("Cantidad OK"); // Punto 2: Solo voz y sonido si está OK
             }
 
             const res = await fetch(GOOGLE_URL, {method:'POST', body: JSON.stringify({
-                action:'registrarCantidad', nroCarga: currentCarga, 
-                indexFila: selectedItem.index, cantidad: cant
+                action:'registrarCantidad', nroCarga: currentCarga, indexFila: selectedItem.index, cantidad: cant
             })});
-            const data = await res.json();
             
-            if(data.success) {
-                decir(`Registrado ${cant} ${selectedItem.um}`); // PUNTO 6: Dice cantidad y unidad
-                selectedItem.actual = finalEscaneado; // Actualiza valor en memoria
-                addHistorial(selectedItem.sku, cant, selectedItem.um, selectedItem.index);
-                document.getElementById('secCantidad').classList.add('step-hidden');
-                document.getElementById('barcode').value = '';
-                actualizarContadores();
-            }
+            decir(`Registrado ${cant} ${selectedItem.um}`);
+            selectedItem.actual = finalEscaneado;
+            addHistorial(selectedItem.sku, cant, selectedItem.um, selectedItem.index);
+            document.getElementById('secCantidad').classList.add('step-hidden');
+            document.getElementById('barcode').value = '';
+            actualizarContadores();
         }
 
-        // PUNTO 3: Historial con botón para Anular
         function addHistorial(sku, c, um, idFila) {
             const list = document.getElementById('historial');
             const divId = "hist-" + Date.now();
             const d = document.createElement('div');
             d.id = divId;
-            d.className = "bg-white p-3 rounded-xl border border-slate-200 text-sm flex justify-between items-center shadow-sm";
+            d.className = "bg-white p-3 rounded-xl border border-slate-200 text-sm flex justify-between items-center shadow-sm mb-2";
             d.innerHTML = `
                 <div><span class="font-bold text-blue-900">${sku}</span> <span class="text-xs text-slate-500">(${um})</span></div>
                 <div class="flex items-center gap-3">
                     <span class="font-black text-green-600">+${c}</span>
-                    <button onclick="anularRegistro(${idFila}, ${c}, '${divId}')" class="bg-red-100 text-red-600 px-3 py-1 rounded-lg font-bold text-xs">❌ ANULAR</button>
+                    <button onclick="anularRegistro(${idFila}, ${c}, '${divId}')" class="bg-red-50 text-red-600 p-2 rounded-lg font-bold text-[10px]">❌</button>
                 </div>
             `;
             list.prepend(d);
         }
 
         async function anularRegistro(indexFila, cantidad, htmlId) {
-            if(!confirm("¿Seguro que desea ANULAR este ingreso? Se restará de la carga general.")) return;
-            
-            const res = await fetch(GOOGLE_URL, {method:'POST', body: JSON.stringify({
+            if(!confirm("¿Anular este registro?")) return;
+            await fetch(GOOGLE_URL, {method:'POST', body: JSON.stringify({
                 action:'anularRegistro', nroCarga: currentCarga, indexFila: indexFila, cantidad: cantidad
             })});
+            document.getElementById(htmlId).remove();
+            decir("Registro anulado");
+            actualizarContadores();
+        }
+
+        async function actualizarContadores() {
+            const res = await fetch(GOOGLE_URL, {method:'POST', body: JSON.stringify({action:'obtenerResumen', nroCarga: currentCarga})});
             const data = await res.json();
             if(data.success) {
-                document.getElementById(htmlId).remove();
-                decir("Registro anulado");
-                actualizarContadores();
+                let cT=0, cS=0, uT=0, uS=0;
+                data.resumen.forEach(i => {
+                    if(i.um === "CAJA") { cT += i.total; cS += i.scan; }
+                    else { uT += i.total; uS += i.scan; }
+                });
+                document.getElementById('contadores').innerHTML = `${cS}/${cT} CA<br>${uS}/${uT} UN`;
             }
         }
 
@@ -285,92 +278,74 @@
         }
 
         function cerrarResumen() { document.getElementById('modalResumen').classList.add('step-hidden'); }
-        function confirmarFinalizar() { if(confirm("¿Generar reporte PDF y finalizar?")) generarPDF(); }
+        function confirmarFinalizar() { if(confirm("¿Finalizar y eliminar carga de la planilla?")) generarPDF(); }
 
-        // PUNTO 4: Rediseño del PDF
         async function generarPDF() {
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF();
-            
-            // Imagen genérica en Base64 para el logo (Reemplazar por el de AMBALOG si se desea)
-            // Se dibuja un cuadrito simulando el logo para cumplir el diseño profesional
-            
             const res = await fetch(GOOGLE_URL, {method:'POST', body: JSON.stringify({action:'finalizarCarga', nroCarga: currentCarga})});
             const data = await res.json();
             
-            // Cabecera
-            doc.setFontSize(16);
+            // CABECERA (Punto 4)
             doc.setFont("helvetica", "bold");
+            doc.setFontSize(18);
             doc.text("REPORTE DE CONTROL DE CARGA", 10, 20);
             
-            doc.setFontSize(10);
-            doc.setFont("helvetica", "normal");
-            doc.text(`Carga Nro: ${currentCarga}`, 10, 30);
-            doc.text(`Fecha Impresión: ${new Date().toLocaleString()}`, 10, 36);
-
-            // Títulos de la tabla
-            let y = 50;
-            doc.setFont("helvetica", "bold");
+            doc.setFontSize(12);
+            doc.text(`Verificador: ${nombreOp}`, 10, 30);
+            doc.text(`Carga Nro: ${currentCarga}`, 10, 38);
+            
             doc.setFontSize(9);
+            doc.setFont("helvetica", "normal");
+            doc.text(`Fecha Impresión: ${new Date().toLocaleString()}`, 10, 44);
+
+            let y = 55;
+            doc.setFont("helvetica", "bold");
             doc.text("SKU", 10, y);
             doc.text("DESCRIPCION", 35, y);
-            doc.text("UM", 120, y);
-            doc.text("CANT", 140, y);
+            doc.text("UM", 115, y);
+            doc.text("TOTAL", 135, y);
             doc.text("CONT", 155, y);
             doc.text("CHECK", 175, y);
-            doc.line(10, y+2, 200, y+2); // Línea divisoria
-            doc.setFont("helvetica", "normal");
+            doc.line(10, y+2, 200, y+2);
             
             y += 8;
-
-            // Filas
             data.reporte.slice(1).forEach(f => {
-                let sku = f[2].toString();
-                let desc = f[3].toString().substring(0, 35); // Corta textos muy largos
-                let um = f[5].toString();
-                let cant = parseInt(f[6]) || 0;
-                let cont = parseInt(f[7]) || 0;
-                
-                // Lógica de Check
-                let checkStr = (cant === cont) ? "OK (   )" : "DIF (   )";
+                const cant = parseInt(f[6]) || 0;
+                const cont = parseInt(f[7]) || 0;
+                const dif = cant !== cont;
 
-                doc.text(sku, 10, y);
-                doc.text(desc, 35, y);
-                doc.text(um, 120, y);
-                doc.text(cant.toString(), 140, y);
+                // PUNTO 4: Resaltar en negrita si hay diferencia
+                if(dif) doc.setFont("helvetica", "bold");
+                else doc.setFont("helvetica", "normal");
+
+                doc.text(f[2].toString(), 10, y);
+                doc.text(f[3].toString().substring(0, 35), 35, y);
+                doc.text(f[5].toString(), 115, y);
+                doc.text(cant.toString(), 135, y);
                 doc.text(cont.toString(), 155, y);
-                doc.text(checkStr, 175, y);
+                doc.text(dif ? "DIF (  )" : "OK (  )", 175, y);
+                
                 y += 6;
-
-                if (y > 270) { doc.addPage(); y = 20; }
+                if (y > 280) { doc.addPage(); y = 20; }
             });
 
-            // Pie de página (PUNTO 5)
-            y += 10;
-            doc.setFont("helvetica", "italic");
-            doc.text(`Controlado por operador: ${nombreOp}`, 10, y);
-
-            doc.save(`REPORTE_CARGA_${currentCarga}.pdf`);
-            setTimeout(() => { location.reload(); }, 2000);
+            doc.save(`CARGA_${currentCarga}.pdf`);
+            setTimeout(() => { location.reload(); }, 1500);
         }
 
-        // Funciones de Cámara
-        let html5QrScanner = null;
         function toggleCamara() {
             const r = document.getElementById('reader');
             if(r.classList.contains('hidden')) {
                 r.classList.remove('hidden');
-                html5QrScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 });
-                html5QrScanner.render(txt => {
+                let scanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 });
+                scanner.render(txt => {
                     document.getElementById('barcode').value = txt;
                     r.classList.add('hidden');
-                    html5QrScanner.clear();
+                    scanner.clear();
                     buscarArticulo();
                 });
-            } else {
-                r.classList.add('hidden');
-                if(html5QrScanner) html5QrScanner.clear();
-            }
+            } else { r.classList.add('hidden'); }
         }
     </script>
 </body>
