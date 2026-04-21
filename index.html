@@ -17,7 +17,7 @@
     <header class="bg-blue-900 text-white p-4 sticky top-0 z-50 shadow-md">
         <div class="flex justify-between items-center max-w-md mx-auto">
             <h1 class="font-black text-xl tracking-tighter">SISTEMA M2</h1>
-            <div id="contadores" class="text-[10px] bg-blue-800 px-3 py-1 rounded-lg font-mono leading-tight">
+            <div id="contadores" class="text-[10px] bg-blue-800 px-3 py-1 rounded-lg font-mono leading-tight text-right">
                 ESPERANDO CARGA...
             </div>
         </div>
@@ -39,13 +39,13 @@
                 <label class="block text-xs font-bold text-slate-400 uppercase mb-2">2. Identificar Producto</label>
                 <div class="flex gap-2">
                     <input type="text" id="barcode" placeholder="Escanear o Tipear SKU" class="flex-1 p-4 bg-yellow-50 rounded-2xl font-bold focus:outline-none">
-                    <button onclick="buscarArticulo()" class="bg-blue-600 text-white px-4 rounded-2xl font-bold">BUSCAR</button>
+                    <button onclick="buscarArticulo()" class="bg-blue-600 text-white px-4 rounded-2xl font-bold">OK</button>
                     <button onclick="toggleCamara()" class="bg-slate-800 text-white px-4 rounded-2xl text-xl">📷</button>
                 </div>
                 <div id="reader" class="mt-4 rounded-2xl overflow-hidden hidden"></div>
             </div>
 
-            <div id="secUM" class="step-hidden bg-blue-50 p-4 rounded-3xl border-2 border-blue-200 animate-pulse">
+            <div id="secUM" class="step-hidden bg-blue-50 p-4 rounded-3xl border-2 border-blue-200">
                 <p class="text-xs font-black text-blue-800 mb-3 uppercase">Seleccione Presentación:</p>
                 <div id="contenedorUM" class="grid grid-cols-1 gap-2"></div>
             </div>
@@ -74,7 +74,7 @@
 
     <div id="modalResumen" class="step-hidden fixed inset-0 bg-black/60 z-[60] p-4 flex items-center justify-center">
         <div class="bg-white w-full max-w-xs rounded-3xl max-h-[80vh] flex flex-col p-6 shadow-2xl">
-            <h3 class="font-black text-xl mb-4">Resumen Carga</h3>
+            <h3 class="font-black text-xl mb-4 text-blue-900">Resumen Carga</h3>
             <div id="listaResumen" class="flex-1 overflow-y-auto space-y-3 text-sm border-y py-4"></div>
             <button onclick="cerrarResumen()" class="mt-4 w-full py-3 bg-blue-900 text-white rounded-xl font-bold">CERRAR</button>
         </div>
@@ -86,14 +86,14 @@
         let selectedItem = null;
         let html5QrScanner = null;
 
-        // Punto 7: Voz del sistema
+        // Punto 7: Voz que asiste al operario
         function decir(frase) {
             const ut = new SpeechSynthesisUtterance(frase);
             ut.lang = 'es-AR';
             window.speechSynthesis.speak(ut);
         }
 
-        // Punto 9: Prevenir salida accidental
+        // Punto 9: Alerta de recarga de página
         window.onbeforeunload = () => "¿Seguro que desea salir? Se perderá el progreso no finalizado.";
 
         async function iniciar() {
@@ -111,9 +111,13 @@
                     document.getElementById('stepOperacion').classList.remove('step-hidden');
                     document.getElementById('footerApp').classList.remove('step-hidden');
                     actualizarContadores();
-                    decir("Carga validada correctamente.");
-                } else { alert(data.msg); }
-            } catch(e) { alert("Error de conexión"); }
+                    decir("Carga validada. Inicie el escaneo.");
+                } else { 
+                    alert(data.msg); 
+                }
+            } catch(e) { 
+                alert("Error de conexión con el servidor"); 
+            }
             btn.innerText = "OK";
         }
 
@@ -140,6 +144,7 @@
             if(data.success) {
                 const cont = document.getElementById('contenedorUM');
                 cont.innerHTML = '';
+                // Punto 2: Manejo de múltiples líneas para un mismo SKU
                 data.opciones.forEach(op => {
                     const b = document.createElement('button');
                     b.className = "w-full p-4 bg-white border border-blue-200 rounded-2xl font-bold text-blue-900 flex justify-between shadow-sm active:bg-blue-100";
@@ -149,8 +154,11 @@
                 });
                 document.getElementById('secUM').classList.remove('step-hidden');
                 document.getElementById('secCantidad').classList.add('step-hidden');
-                decir("Artículo " + data.opciones[0].sku + ". Seleccione unidad.");
-            } else { alert(data.msg); decir("Sku no encontrado."); }
+                decir("Artículo encontrado. Seleccione presentación.");
+            } else { 
+                alert(data.msg); 
+                decir("Sku no encontrado en carga."); 
+            }
         }
 
         function prepararRegistro(item) {
@@ -159,6 +167,7 @@
             document.getElementById('txtDesc').innerText = `${item.desc} (${item.um})`;
             document.getElementById('secUM').classList.add('step-hidden');
             document.getElementById('secCantidad').classList.remove('step-hidden');
+            document.getElementById('cantInput').value = "";
             document.getElementById('cantInput').focus();
         }
 
@@ -173,18 +182,21 @@
             const data = await res.json();
 
             if(data.success) {
-                decir(`Registrado SKU ${selectedItem.sku}, cantidad ${cant}.`);
+                // Punto 7: Voz confirmando SKU y Cantidad
+                decir(`Registrado SKU ${selectedItem.sku}, cantidad ${cant}. ${data.msg}`);
                 addHistorial(selectedItem.sku, cant, selectedItem.um);
                 document.getElementById('secCantidad').classList.add('step-hidden');
                 document.getElementById('barcode').value = '';
                 actualizarContadores();
-            } else { alert(data.msg); }
+            } else { 
+                alert(data.msg); 
+            }
         }
 
         function addHistorial(sku, c, um) {
             const h = document.getElementById('historial');
             const d = document.createElement('div');
-            d.className = "bg-white p-3 rounded-xl border-l-4 border-green-500 text-xs flex justify-between";
+            d.className = "bg-white p-3 rounded-xl border-l-4 border-green-500 text-xs flex justify-between shadow-sm animate-fade-in";
             d.innerHTML = `<span><b>${sku}</b> (${um})</span> <span class="font-bold text-green-700">+${c}</span>`;
             h.prepend(d);
         }
@@ -196,17 +208,19 @@
             list.innerHTML = '';
             data.resumen.forEach(i => {
                 const div = document.createElement('div');
-                div.className = "p-2 bg-slate-50 rounded-lg";
-                div.innerHTML = `<div class="font-bold">${i.sku}</div><div class="text-[10px] text-slate-500">${i.desc}</div><div class="flex justify-between font-mono font-bold mt-1"><span>${i.um}</span><span>${i.scan}/${i.total}</span></div>`;
+                div.className = "p-2 bg-slate-50 rounded-lg border border-slate-100";
+                div.innerHTML = `<div class="font-bold text-blue-900">${i.sku}</div><div class="text-[10px] text-slate-500">${i.desc}</div><div class="flex justify-between font-mono font-bold mt-1 text-slate-700"><span>${i.um}</span><span>${i.scan}/${i.total}</span></div>`;
                 list.appendChild(div);
             });
             document.getElementById('modalResumen').classList.remove('step-hidden');
         }
 
-        function cerrarResumen() { document.getElementById('modalResumen').classList.add('step-hidden'); }
+        function cerrarResumen() { 
+            document.getElementById('modalResumen').classList.add('step-hidden'); 
+        }
 
         function confirmarFinalizar() {
-            if(confirm("¿Seguro que desea finalizar el conteo? Se generará un reporte PDF y se cerrará el proceso.")) {
+            if(confirm("¿Desea finalizar el conteo? Se generará el PDF y se borrará la carga del sistema.")) {
                 generarPDF();
             }
         }
@@ -217,25 +231,33 @@
             const res = await fetch(GOOGLE_URL, {method:'POST', body: JSON.stringify({action:'finalizarCarga', nroCarga: currentCarga})});
             const data = await res.json();
             
-            doc.setFontSize(18); doc.text("CONTROL DE CARGA M2 - REPORTE", 10, 20);
-            doc.setFontSize(12); doc.text("Número de Carga: " + currentCarga, 10, 30);
-            doc.text("Fecha: " + new Date().toLocaleString(), 10, 37);
+            // Estilo del Reporte PDF (Punto 11)
+            doc.setFontSize(18); doc.setTextColor(30, 58, 138); 
+            doc.text("REPORTE DE CONTROL DE CARGA M2", 10, 20);
+            doc.setFontSize(12); doc.setTextColor(100);
+            doc.text(`Carga Nro: ${currentCarga} | Fecha: ${new Date().toLocaleString()}`, 10, 30);
             
             let y = 50;
-            doc.setFontSize(10);
-            doc.text("SKU | DESCRIPCION | UM | CANT | SCAN | DIF", 10, y);
-            y += 5;
+            doc.setFontSize(10); doc.setTextColor(0);
+            doc.text("SKU        DESCRIPCIÓN          UM    TOT  SCAN  DIF", 10, y);
+            doc.line(10, y+2, 200, y+2);
+            y += 10;
             
             data.reporte.slice(1).forEach(f => {
-                const dif = (parseInt(f[6]) || 0) - (parseInt(f[7]) || 0);
-                doc.text(`${f[2]} | ${f[3].substring(0,15)} | ${f[5]} | ${f[6]} | ${f[7]||0} | ${dif}`, 10, y);
-                y += 6;
+                const total = parseInt(f[6]) || 0;
+                const scan = parseInt(f[7]) || 0;
+                const dif = total - scan;
+                doc.text(`${f[2]} | ${f[3].substring(0,18)} | ${f[5]} | ${total} | ${scan} | ${dif}`, 10, y);
+                y += 7;
                 if(y > 280) { doc.addPage(); y = 20; }
             });
             
-            doc.save(`REPORTE_M2_CARGA_${currentCarga}.pdf`);
-            decir("Proceso finalizado. Reporte descargado.");
-            setTimeout(() => location.reload(), 2000);
+            doc.save(`CONTROL_M2_CARGA_${currentCarga}.pdf`);
+            decir("Proceso finalizado. Reporte guardado.");
+            setTimeout(() => {
+                window.onbeforeunload = null;
+                location.reload();
+            }, 3000);
         }
 
         function toggleCamara() {
