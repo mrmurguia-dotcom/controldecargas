@@ -3,163 +3,201 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Operario M2 - Control por Pasos</title>
+    <title>M2 - Sistema de Control Profesional</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/html5-qrcode"></script>
-    <style>
-        body { background-color: #f3f4f6; font-family: sans-serif; }
-        .btn-primary { background-color: #1e3a8a; color: white; transition: 0.2s; }
-        .btn-primary:active { transform: scale(0.95); }
-        .hidden-section { display: none; }
-    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
-<body class="min-h-screen flex items-center justify-center p-4">
+<body class="bg-gray-100 min-h-screen pb-20">
+    <script>window.onbeforeunload = () => "Existen datos sin guardar, ¿desea salir?";</script>
 
-    <div class="bg-white w-full max-w-md rounded-3xl shadow-xl overflow-hidden">
-        <div class="bg-blue-900 p-4 text-white text-center">
-            <h1 class="text-xl font-bold tracking-widest">CONTROL M2</h1>
+    <div class="max-w-md mx-auto bg-white min-h-screen shadow-lg flex flex-col">
+        <div class="bg-blue-900 p-4 text-white flex justify-between items-center">
+            <h1 class="font-bold tracking-tighter text-lg">M2 DEPÓSITO</h1>
+            <div id="contadorGlobal" class="text-xs font-mono bg-blue-800 p-2 rounded">Cargando...</div>
         </div>
 
-        <div class="p-6 space-y-6">
-            
-            <div id="step1">
-                <label class="text-xs font-bold text-gray-500 uppercase">1. Número de Carga</label>
-                <div class="flex gap-2 mt-1">
-                    <input type="number" id="nroCarga" placeholder="Ej: 8612" class="flex-1 p-3 bg-gray-100 rounded-xl font-bold text-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    <button onclick="validarCarga()" class="btn-primary px-6 rounded-xl font-bold" id="btnCarga">OK</button>
+        <div id="secCarga" class="p-4 border-b">
+            <div class="flex gap-2">
+                <input type="number" id="nroCarga" placeholder="Nro de Carga" class="flex-1 border p-3 rounded-xl font-bold">
+                <button onclick="iniciarCarga()" class="bg-blue-600 text-white px-6 rounded-xl font-bold">INICIAR</button>
+            </div>
+        </div>
+
+        <div id="secOp" class="hidden p-4 space-y-4 flex-1">
+            <div class="flex gap-2">
+                <input type="text" id="barcode" placeholder="SKU o Cámara..." class="flex-1 border p-3 rounded-xl font-bold bg-yellow-50">
+                <button onclick="abrirCamara()" class="bg-gray-800 text-white px-4 rounded-xl">📷</button>
+                <button onclick="buscarSKU()" class="bg-blue-600 text-white px-4 rounded-xl font-bold">OK</button>
+            </div>
+            <div id="reader" class="hidden rounded-xl overflow-hidden"></div>
+
+            <div id="selectorUM" class="hidden space-y-2 p-3 bg-gray-50 rounded-xl border-2 border-blue-200">
+                <p class="text-xs font-bold text-blue-600 uppercase">Seleccione Variante:</p>
+                <div id="listaUM" class="grid grid-cols-1 gap-2"></div>
+            </div>
+
+            <div id="secCant" class="hidden bg-white border-2 border-blue-900 rounded-2xl p-4 shadow-xl">
+                <h2 id="dispArt" class="text-xl font-black leading-none"></h2>
+                <p id="dispDesc" class="text-sm text-gray-500 mb-4"></p>
+                <div class="flex gap-2 items-center">
+                    <input type="number" id="inputCant" placeholder="Cantidad" class="flex-1 text-3xl font-bold border-b-4 border-blue-900 focus:outline-none p-2 text-center">
+                    <button onclick="confirmarRegistro()" class="bg-green-600 text-white h-16 px-6 rounded-xl font-black">REGISTRAR</button>
                 </div>
             </div>
 
-            <div id="step2" class="hidden-section pt-4 border-t border-gray-200">
-                <label class="text-xs font-bold text-gray-500 uppercase">2. Buscar Artículo</label>
-                <div class="flex gap-2 mt-1">
-                    <input type="text" id="barcode" placeholder="Tipear SKU..." class="flex-1 p-3 bg-gray-100 rounded-xl font-bold text-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    <button onclick="buscarArticulo()" class="btn-primary px-4 rounded-xl font-bold">OK</button>
-                    <button onclick="abrirCamara()" class="bg-gray-800 text-white px-4 rounded-xl">📷</button>
-                </div>
-                <div id="reader" class="w-full mt-4 rounded-xl overflow-hidden hidden-section"></div>
+            <div class="pt-4">
+                <h3 class="text-xs font-bold text-gray-400 mb-2 uppercase">Recientes</h3>
+                <div id="historial" class="space-y-2"></div>
             </div>
+        </div>
 
-            <div id="step3" class="hidden-section p-4 bg-blue-50 border border-blue-100 rounded-2xl">
-                <p class="text-xs font-bold text-green-600 uppercase mb-2">✓ SKU ENCONTRADO EN LA CARGA</p>
-                <h2 id="resArt" class="text-2xl font-black text-blue-900 leading-none"></h2>
-                <p id="resDesc" class="text-gray-600 text-sm mb-4"></p>
-                
-                <label class="text-xs font-bold text-gray-500 uppercase">3. Cantidad a cargar (Faltan: <span id="resFalta"></span>)</label>
-                <div class="flex gap-2 mt-1">
-                    <input type="number" id="cantidad" placeholder="Cant" class="w-24 p-3 bg-white border border-gray-300 rounded-xl font-bold text-xl text-center focus:outline-none">
-                    <button onclick="dictarCantidad()" class="bg-red-500 text-white px-4 rounded-xl font-bold active:scale-95">🎤 Hablar</button>
-                    <button onclick="guardarCantidad()" class="btn-primary flex-1 rounded-xl font-bold">GUARDAR</button>
-                </div>
+        <div id="footerActions" class="hidden fixed bottom-0 w-full max-w-md bg-white border-t p-3 grid grid-cols-2 gap-3 shadow-[0_-5px_15px_rgba(0,0,0,0.1)]">
+            <button onclick="verResumen()" class="bg-gray-200 text-gray-800 p-3 rounded-xl font-bold">VER RESUMEN</button>
+            <button onclick="finalizarTodo()" class="bg-red-600 text-white p-3 rounded-xl font-bold">FINALIZAR</button>
+        </div>
+    </div>
+
+    <div id="modalResumen" class="hidden fixed inset-0 bg-black/80 p-4 z-50 overflow-y-auto">
+        <div class="bg-white rounded-3xl p-6 max-w-sm mx-auto">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="font-black text-xl">Resumen de Carga</h2>
+                <button onclick="cerrarModal()" class="text-red-500 font-bold">CERRAR</button>
             </div>
-
-            <div id="msgBox" class="hidden-section p-3 rounded-xl text-center font-bold text-sm"></div>
-
+            <div id="resumenContent" class="text-sm space-y-2"></div>
         </div>
     </div>
 
     <script>
-        const GOOGLE_URL = "https://script.google.com/macros/s/AKfycbzKjFlPsGUOP1QgLr2FkFvodke-czEuXRmhoLyYmj7a2bgp4ZGEiHNSek6EUhIteEk/exec";
-        let html5QrcodeScanner;
+        const GOOGLE_URL = "https://script.google.com/macros/s/AKfycbwqMe_5CSD0HJLu1IZriZ-sJwzBkZ1vU6sPhq1wsJ6ko8cnSix0uHKEXss33Ea7FbQ5/exec"; // REEMPLAZAR CON TU URL ACTUALIZADA
+        let cargaActual = "";
+        let articuloSeleccionado = null;
 
-        function showMsg(text, type = 'error') {
-            const box = document.getElementById('msgBox');
-            box.innerText = text;
-            box.className = `p-3 rounded-xl text-center font-bold text-sm mt-4 ${type === 'error' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`;
-            box.style.display = 'block';
-            setTimeout(() => box.style.display = 'none', 4000);
+        // Punto 7: Voz
+        function hablar(texto) {
+            const msg = new SpeechSynthesisUtterance(texto);
+            msg.lang = 'es-AR';
+            window.speechSynthesis.speak(msg);
         }
 
-        async function validarCarga() {
-            const btn = document.getElementById('btnCarga');
-            const nroCarga = document.getElementById('nroCarga').value;
-            if(!nroCarga) return showMsg("Ingrese un número de carga");
-
-            btn.innerText = "...";
-            try {
-                const res = await fetch(GOOGLE_URL, { method: 'POST', body: JSON.stringify({ action: 'validarCarga', nroCarga }) });
-                const data = await res.json();
-                if(data.success) {
-                    document.getElementById('nroCarga').disabled = true;
-                    document.getElementById('step2').style.display = 'block';
-                    showMsg("Carga Validada", "success");
-                } else {
-                    showMsg(data.msg);
-                }
-            } catch(e) { showMsg("Error de conexión"); }
-            btn.innerText = "OK";
+        async function iniciarCarga() {
+            cargaActual = document.getElementById('nroCarga').value;
+            if(!cargaActual) return alert("Ingrese carga");
+            const res = await fetch(GOOGLE_URL, {method:'POST', body: JSON.stringify({action:'validarCarga', nroCarga: cargaActual})});
+            const data = await res.json();
+            if(data.success) {
+                document.getElementById('secCarga').classList.add('hidden');
+                document.getElementById('secOp').classList.remove('hidden');
+                document.getElementById('footerActions').classList.remove('hidden');
+                actualizarContadores();
+                hablar("Carga inicializada");
+            } else { alert(data.msg); }
         }
 
-        async function buscarArticulo() {
-            const nroCarga = document.getElementById('nroCarga').value;
-            const barcode = document.getElementById('barcode').value;
-            if(!barcode) return showMsg("Ingrese o escanee SKU");
-
-            try {
-                const res = await fetch(GOOGLE_URL, { method: 'POST', body: JSON.stringify({ action: 'buscarArticulo', nroCarga, barcode }) });
-                const data = await res.json();
-                
-                if(data.success) {
-                    document.getElementById('resArt').innerText = data.art;
-                    document.getElementById('resDesc').innerText = data.desc;
-                    document.getElementById('resFalta').innerText = data.faltante;
-                    document.getElementById('step3').style.display = 'block';
-                    document.getElementById('cantidad').value = '';
-                    if(html5QrcodeScanner) html5QrcodeScanner.clear(); // Apaga cámara si estaba prendida
-                } else {
-                    showMsg(data.msg);
-                    document.getElementById('step3').style.display = 'none';
-                }
-            } catch(e) { showMsg("Error de conexión"); }
-        }
-
-        async function guardarCantidad() {
-            const nroCarga = document.getElementById('nroCarga').value;
-            const barcode = document.getElementById('barcode').value;
-            const cantidad = document.getElementById('cantidad').value;
-
-            if(!cantidad || cantidad <= 0) return showMsg("Ingrese una cantidad válida");
-
-            try {
-                const res = await fetch(GOOGLE_URL, { method: 'POST', body: JSON.stringify({ action: 'registrarCantidad', nroCarga, barcode, cantidad }) });
-                const data = await res.json();
-                
-                if(data.success) {
-                    showMsg(data.msg, "success");
-                    // Resetear para el siguiente artículo
-                    document.getElementById('step3').style.display = 'none';
-                    document.getElementById('barcode').value = '';
-                    document.getElementById('barcode').focus();
-                } else {
-                    showMsg(data.msg);
-                }
-            } catch(e) { showMsg("Error de conexión"); }
-        }
-
-        function abrirCamara() {
-            document.getElementById('reader').style.display = 'block';
-            html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 });
-            html5QrcodeScanner.render((decodedText) => {
-                document.getElementById('barcode').value = decodedText;
-                html5QrcodeScanner.clear();
-                document.getElementById('reader').style.display = 'none';
-                buscarArticulo(); // Autoejecuta la búsqueda al escanear
-            });
-        }
-
-        function dictarCantidad() {
-            if ('webkitSpeechRecognition' in window) {
-                const recognition = new webkitSpeechRecognition();
-                recognition.lang = 'es-AR';
-                recognition.start();
-                recognition.onresult = function(event) {
-                    const numero = parseInt(event.results[0][0].transcript.replace(/\D/g,''));
-                    if(!isNaN(numero)) document.getElementById('cantidad').value = numero;
-                    else showMsg("No se entendió el número");
-                };
-            } else {
-                showMsg("Tu navegador no soporta dictado por voz");
+        async function actualizarContadores() {
+            const res = await fetch(GOOGLE_URL, {method:'POST', body: JSON.stringify({action:'obtenerResumen', nroCarga: cargaActual})});
+            const data = await res.json();
+            if(data.success) {
+                let caT = 0, caS = 0, unT = 0, unS = 0;
+                data.resumen.forEach(item => {
+                    if(item.um === "CAJA") { caT += item.total; caS += item.scan; }
+                    else { unT += item.total; unS += item.scan; }
+                });
+                document.getElementById('contadorGlobal').innerHTML = `${caS}/${caT} CA | ${unS}/${unT} UN`;
             }
+        }
+
+        async function buscarSKU() {
+            const sku = document.getElementById('barcode').value;
+            const res = await fetch(GOOGLE_URL, {method:'POST', body: JSON.stringify({action:'buscarArticulo', nroCarga: cargaActual, barcode: sku})});
+            const data = await res.json();
+            
+            if(data.success) {
+                const lista = document.getElementById('listaUM');
+                lista.innerHTML = '';
+                data.opciones.forEach(op => {
+                    const btn = document.createElement('button');
+                    btn.className = "p-3 bg-blue-100 rounded-lg text-left font-bold border border-blue-300";
+                    btn.innerText = `${op.um} (Faltan: ${op.total - op.actual})`;
+                    btn.onclick = () => seleccionarUM(op);
+                    lista.appendChild(btn);
+                });
+                document.getElementById('selectorUM').classList.remove('hidden');
+                hablar("Artículo encontrado. Elija unidad de medida");
+            } else { alert(data.msg); }
+        }
+
+        function seleccionarUM(op) {
+            articuloSeleccionado = op;
+            document.getElementById('dispArt').innerText = op.sku;
+            document.getElementById('dispDesc').innerText = op.desc + " - " + op.um;
+            document.getElementById('selectorUM').classList.add('hidden');
+            document.getElementById('secCant').classList.remove('hidden');
+            document.getElementById('inputCant').focus();
+        }
+
+        async function confirmarRegistro() {
+            const cant = document.getElementById('inputCant').value;
+            if(!cant || cant <= 0) return;
+
+            const res = await fetch(GOOGLE_URL, {method:'POST', body: JSON.stringify({
+                action:'registrarCantidad', 
+                nroCarga: cargaActual, 
+                barcode: articuloSeleccionado.sku,
+                indexFila: articuloSeleccionado.index,
+                cantidad: cant
+            })});
+            const data = await res.json();
+
+            if(data.success) {
+                hablar(`Registrado ${articuloSeleccionado.sku}, cantidad ${cant}. ${data.msg}`);
+                agregarHistorial(articuloSeleccionado.sku, cant, articuloSeleccionado.um);
+                document.getElementById('secCant').classList.add('hidden');
+                document.getElementById('barcode').value = '';
+                actualizarContadores();
+            } else { alert(data.msg); }
+        }
+
+        function agregarHistorial(sku, cant, um) {
+            const hist = document.getElementById('historial');
+            const item = `<div class="bg-white p-2 rounded border-l-4 border-green-500 shadow-sm text-xs"><b>${sku}</b>: ${cant} ${um}</div>`;
+            hist.innerHTML = item + hist.innerHTML;
+        }
+
+        async function verResumen() {
+            const res = await fetch(GOOGLE_URL, {method:'POST', body: JSON.stringify({action:'obtenerResumen', nroCarga: cargaActual})});
+            const data = await res.json();
+            let html = "";
+            data.resumen.forEach(i => {
+                html += `<div class="border-b py-1"><b>${i.sku}</b> - ${i.desc}<br>${i.scan}/${i.total} ${i.um}</div>`;
+            });
+            document.getElementById('resumenContent').innerHTML = html;
+            document.getElementById('modalResumen').classList.remove('hidden');
+        }
+
+        function cerrarModal() { document.getElementById('modalResumen').classList.add('hidden'); }
+
+        function finalizarTodo() {
+            if(confirm("¿Desea finalizar y generar PDF? Se borrará la pestaña del sheet.")) {
+                generarPDF();
+            }
+        }
+
+        async function generarPDF() {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            const res = await fetch(GOOGLE_URL, {method:'POST', body: JSON.stringify({action:'finalizarCarga', nroCarga: cargaActual})});
+            const data = await res.json();
+            
+            doc.text("Reporte de Carga: " + cargaActual, 10, 10);
+            let y = 20;
+            data.reporte.forEach(f => {
+                doc.text(`${f[2]} - ${f[3]} - ${f[5]} - Escaneado: ${f[7] || 0}/${f[6]}`, 10, y);
+                y += 7;
+            });
+            doc.save(`Carga_${cargaActual}.pdf`);
+            alert("Reporte guardado. La aplicación se reiniciará.");
+            window.location.reload();
         }
     </script>
 </body>
