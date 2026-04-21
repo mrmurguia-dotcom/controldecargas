@@ -51,31 +51,28 @@
     </div>
   </div>
 
-  <>
-    // URL de tu Apps Script (Confirmada)
+  <script>
+    // 1. URL DE TU APPS SCRIPT (Verifica que sea la de la versión más reciente)
     const GOOGLE_URL = "https://script.google.com/macros/s/AKfycbxEvbiImOLlbDGkLyIQOjJOq641_3qVZssw1uTSM24C5Hw1NjpiDo48Bjd_0b1IWro/exec";
     
-    // Función optimizada para evitar CORS enviando como text/plain
-   async function callGoogle(payload) {
-  try {
-    // Usamos 'no-cors' para que el navegador no bloquee el envío
-    await fetch(GOOGLE_URL, {
-      method: "POST",
-      mode: "no-cors", 
-      headers: {
-        "Content-Type": "text/plain;charset=utf-8", 
-      },
-      body: JSON.stringify(payload)
-    });
-    
-    // Con no-cors no podemos leer la respuesta, así que damos un mensaje positivo
-    return { success: true, msg: "Comando enviado. Revisa tu Google Sheet en unos segundos." };
-    
-  } catch (error) {
-    console.error("Error en conexión:", error);
-    throw error;
-  }
-}
+    // 2. FUNCIÓN DE COMUNICACIÓN MEJORADA
+    async function callGoogle(payload) {
+      try {
+        // Eliminamos 'no-cors' para poder leer la respuesta del servidor
+        const response = await fetch(GOOGLE_URL, {
+          method: "POST",
+          body: JSON.stringify(payload)
+        });
+        
+        // Retornamos la respuesta real del Apps Script
+        return await response.json();
+        
+      } catch (error) {
+        console.error("Error en conexión:", error);
+        return { success: false, msg: "No se pudo conectar con el servidor." };
+      }
+    }
+
     async function importar() {
       const nro = document.getElementById('nroCarga').value;
       if(!nro) return alert("Ingresa el número de carga");
@@ -93,7 +90,7 @@
           alert("⚠️ ERROR: " + res.msg);
         }
       } catch (e) {
-        alert("Error de conexión. Verifica que la App Script esté publicada correctamente.");
+        alert("Error de conexión. Verifica que la App Script esté publicada como 'Cualquiera'.");
       } finally {
         btn.disabled = false;
         btn.innerText = "IMPORTAR";
