@@ -52,28 +52,21 @@
   </div>
 
   <script>
-    // URL de tu Apps Script
+    // URL de tu Apps Script (Confirmada)
     const GOOGLE_URL = "https://script.google.com/macros/s/AKfycbxEvbiImOLlbDGkLyIQOjJOq641_3qVZssw1uTSM24C5Hw1NjpiDo48Bjd_0b1IWro/exec";
     
-    // Función modificada para saltar el bloqueo de CORS usando formato de formulario
+    // Función optimizada para evitar CORS enviando como text/plain
     async function callGoogle(payload) {
       try {
-        const formBody = new URLSearchParams();
-        formBody.append('data', JSON.stringify(payload));
-
         const response = await fetch(GOOGLE_URL, {
           method: "POST",
-          mode: "no-cors", // Evita la validación estricta de CORS
+          mode: "cors", 
           headers: {
-            "Content-Type": "application/x-www-form-urlencoded",
+            "Content-Type": "text/plain;charset=utf-8", 
           },
-          body: formBody
+          body: JSON.stringify(payload)
         });
-        
-        // Con no-cors no podemos leer la respuesta JSON directamente,
-        // así que asumimos éxito si no hay error de red. 
-        // Nota: Para sistemas de control es mejor manejarlo así que tener bloqueo total.
-        return { success: true, msg: "Petición procesada correctamente." };
+        return await response.json();
       } catch (error) {
         console.error("Error en callGoogle:", error);
         throw error;
@@ -86,13 +79,18 @@
       
       const btn = document.getElementById('btnImport');
       btn.disabled = true;
-      btn.innerText = "...";
+      btn.innerText = "ESPERE...";
 
       try {
         const res = await callGoogle({ action: "importarCarga", nroCarga: nro });
-        alert("Comando enviado: Revisa tu Google Sheet en unos segundos.");
+        
+        if(res.success) {
+          alert("✅ " + res.msg);
+        } else {
+          alert("⚠️ ERROR: " + res.msg);
+        }
       } catch (e) {
-        alert("Error de red o configuración.");
+        alert("Error de conexión. Verifica que la App Script esté publicada correctamente.");
       } finally {
         btn.disabled = false;
         btn.innerText = "IMPORTAR";
@@ -103,23 +101,32 @@
       const nro = document.getElementById('nroCarga').value;
       if(!nro) return alert("Indica la carga primero.");
 
-      document.getElementById('statusControl').innerText = "Enviando escaneo: " + decodedText + "...";
+      const status = document.getElementById('statusControl');
+      status.innerText = "Verificando " + decodedText + "...";
+      status.className = "mt-4 p-4 rounded-xl text-center font-bold bg-yellow-50 text-yellow-600 border-2 border-yellow-200";
       
       try {
-        await callGoogle({ action: "validarEscaneo", barcode: decodedText, nroCarga: nro });
-        
-        const status = document.getElementById('statusControl');
-        status.innerText = "✓ ESCANEO ENVIADO";
-        status.className = "mt-4 p-4 rounded-xl text-center font-bold bg-green-50 text-green-600 border-2 border-green-200";
-        
-        // Limpiamos el mensaje después de 2 segundos para el siguiente escaneo
-        setTimeout(() => {
-            status.innerText = "Esperando escaneo...";
-            status.className = "mt-4 p-4 rounded-xl text-center font-bold bg-gray-50 text-gray-400 border-2 border-dashed border-gray-200";
-        }, 2000);
+        const res = await callGoogle({ action: "validarEscaneo", barcode: decodedText, nroCarga: nro });
+        const fb = document.getElementById('feedbackBox');
 
+        if(res.success) {
+          status.innerText = "✓ ITEM CORRECTO";
+          status.className = "mt-4 p-4 rounded-xl text-center font-bold bg-green-50 text-green-600 border-2 border-green-200";
+          
+          fb.classList.remove('hidden');
+          setTimeout(() => { fb.classList.add('scale-100', 'opacity-100'); }, 10);
+          
+          document.getElementById('fArt').innerText = res.art;
+          document.getElementById('fDesc').innerText = res.desc;
+          document.getElementById('fCant').innerText = res.actual + " / " + res.total;
+          document.getElementById('fBar').style.width = (res.actual / res.total * 100) + "%";
+        } else {
+          status.innerText = "⚠️ " + res.msg;
+          status.className = "mt-4 p-4 rounded-xl text-center font-bold bg-red-50 text-red-600 border-2 border-red-200";
+          fb.classList.add('hidden');
+        }
       } catch (e) {
-        console.error("Error en escaneo:", e);
+        status.innerText = "Error de comunicación con el servidor.";
       }
     }
 
