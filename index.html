@@ -3,20 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>M2 - Control Profesional de Carga</title>
+    <title>SISTEMA M2 - CONTROL</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/html5-qrcode"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <style>
-        .step-hidden { display: none; }
-        .active-ring { border: 3px solid #1e40af; }
+        .step-hidden { display: none !important; }
+        #modalResumen { backdrop-filter: blur(4px); }
     </style>
 </head>
 <body class="bg-slate-100 min-h-screen pb-24">
 
     <header class="bg-blue-900 text-white p-4 sticky top-0 z-50 shadow-md">
         <div class="flex justify-between items-center max-w-md mx-auto">
-            <h1 class="font-black text-xl tracking-tighter">SISTEMA M2</h1>
+            <h1 class="font-black text-xl">SISTEMA M2</h1>
             <div id="contadores" class="text-[10px] bg-blue-800 px-3 py-1 rounded-lg font-mono leading-tight text-right">
                 ESPERANDO CARGA...
             </div>
@@ -24,21 +24,19 @@
     </header>
 
     <main class="max-w-md mx-auto p-4 space-y-4">
-        
         <section id="stepCarga" class="bg-white p-6 rounded-3xl shadow-sm border border-slate-200">
             <label class="block text-xs font-bold text-slate-400 uppercase mb-2">1. Validar Número de Carga</label>
             <div class="flex gap-2">
-                <input type="number" id="nroCarga" placeholder="Ej: 8612" class="flex-1 p-4 bg-slate-50 rounded-2xl text-xl font-bold focus:outline-none focus:ring-2 focus:ring-blue-500">
-                <button onclick="iniciar()" id="btnIniciar" class="bg-blue-600 text-white px-6 rounded-2xl font-bold active:scale-95 transition-transform">OK</button>
+                <input type="number" id="nroCarga" placeholder="Ej: 8612" class="flex-1 p-4 bg-slate-50 rounded-2xl text-xl font-bold focus:outline-none">
+                <button onclick="iniciar()" id="btnIniciar" class="bg-blue-600 text-white px-6 rounded-2xl font-bold">OK</button>
             </div>
         </section>
 
         <section id="stepOperacion" class="step-hidden space-y-4">
-            
             <div class="bg-white p-4 rounded-3xl shadow-sm border border-slate-200">
                 <label class="block text-xs font-bold text-slate-400 uppercase mb-2">2. Identificar Producto</label>
                 <div class="flex gap-2">
-                    <input type="text" id="barcode" placeholder="Escanear o Tipear SKU" class="flex-1 p-4 bg-yellow-50 rounded-2xl font-bold focus:outline-none">
+                    <input type="text" id="barcode" placeholder="SKU" class="flex-1 p-4 bg-yellow-50 rounded-2xl font-bold focus:outline-none">
                     <button onclick="buscarArticulo()" class="bg-blue-600 text-white px-4 rounded-2xl font-bold">OK</button>
                     <button onclick="toggleCamara()" class="bg-slate-800 text-white px-4 rounded-2xl text-xl">📷</button>
                 </div>
@@ -51,58 +49,49 @@
             </div>
 
             <div id="secCantidad" class="step-hidden bg-white p-6 rounded-3xl shadow-xl border-t-4 border-blue-900">
-                <div class="mb-4">
-                    <h2 id="txtArt" class="text-2xl font-black text-slate-900"></h2>
-                    <p id="txtDesc" class="text-sm text-slate-500"></p>
-                </div>
+                <h2 id="txtArt" class="text-2xl font-black text-slate-900"></h2>
+                <p id="txtDesc" class="text-sm text-slate-500 mb-4"></p>
                 <div class="flex gap-3">
-                    <input type="number" id="cantInput" placeholder="Cant" class="w-1/2 p-4 text-3xl font-black bg-slate-100 rounded-2xl text-center focus:ring-4 focus:ring-blue-200 focus:outline-none">
-                    <button onclick="guardar()" class="flex-1 bg-green-600 text-white rounded-2xl font-black text-lg active:bg-green-700">REGISTRAR</button>
+                    <input type="number" id="cantInput" placeholder="Cant" class="w-1/2 p-4 text-3xl font-black bg-slate-100 rounded-2xl text-center focus:outline-none">
+                    <button onclick="guardar()" class="flex-1 bg-green-600 text-white rounded-2xl font-black text-lg">REGISTRAR</button>
                 </div>
             </div>
 
-            <div id="historial" class="space-y-2 pb-10">
-                <p class="text-[10px] font-bold text-slate-400 uppercase px-2">Registros Recientes</p>
-            </div>
+            <div id="historial" class="space-y-2 pb-10"></div>
         </section>
     </main>
 
-    <footer id="footerApp" class="step-hidden fixed bottom-0 left-0 right-0 p-4 bg-white/80 backdrop-blur-md border-t flex gap-3 max-w-md mx-auto">
+    <footer id="footerApp" class="step-hidden fixed bottom-0 left-0 right-0 p-4 bg-white/90 border-t flex gap-3 max-w-md mx-auto z-40">
         <button onclick="abrirResumen()" class="flex-1 py-4 bg-slate-200 text-slate-700 rounded-2xl font-bold">VER RESUMEN</button>
         <button onclick="confirmarFinalizar()" class="flex-1 py-4 bg-red-600 text-white rounded-2xl font-bold">FINALIZAR</button>
     </footer>
 
-    <div id="modalResumen" class="step-hidden fixed inset-0 bg-black/60 z-[60] p-4 flex items-center justify-center">
+    <div id="modalResumen" class="step-hidden fixed inset-0 bg-black/60 z-[100] p-4 flex items-center justify-center">
         <div class="bg-white w-full max-w-xs rounded-3xl max-h-[80vh] flex flex-col p-6 shadow-2xl">
             <h3 class="font-black text-xl mb-4 text-blue-900">Resumen Carga</h3>
-            <div id="listaResumen" class="flex-1 overflow-y-auto space-y-3 text-sm border-y py-4"></div>
+            <div id="listaResumen" class="flex-1 overflow-y-auto space-y-3 text-sm border-y py-4">
+                <p class="text-slate-400 italic">Cargando datos...</p>
+            </div>
             <button onclick="cerrarResumen()" class="mt-4 w-full py-3 bg-blue-900 text-white rounded-xl font-bold">CERRAR</button>
         </div>
     </div>
 
     <script>
-        const GOOGLE_URL = "https://script.google.com/macros/s/AKfycbwqMe_5CSD0HJLu1IZriZ-sJwzBkZ1vU6sPhq1wsJ6ko8cnSix0uHKEXss33Ea7FbQ5/exec"; 
+        const GOOGLE_URL = "TU_NUEVA_URL_DE_APPS_SCRIPT"; 
         let currentCarga = "";
         let selectedItem = null;
-        let html5QrScanner = null;
 
-        // Punto 7: Voz que asiste al operario
-        function decir(frase) {
-            const ut = new SpeechSynthesisUtterance(frase);
-            ut.lang = 'es-AR';
-            window.speechSynthesis.speak(ut);
+        function decir(t) { 
+            const u = new SpeechSynthesisUtterance(t); 
+            u.lang = 'es-AR'; 
+            window.speechSynthesis.speak(u); 
         }
-
-        // Punto 9: Alerta de recarga de página
-        window.onbeforeunload = () => "¿Seguro que desea salir? Se perderá el progreso no finalizado.";
 
         async function iniciar() {
             currentCarga = document.getElementById('nroCarga').value;
             if(!currentCarga) return;
-            
             const btn = document.getElementById('btnIniciar');
             btn.innerText = "⏳";
-            
             try {
                 const res = await fetch(GOOGLE_URL, {method:'POST', body: JSON.stringify({action:'validarCarga', nroCarga: currentCarga})});
                 const data = await res.json();
@@ -111,54 +100,43 @@
                     document.getElementById('stepOperacion').classList.remove('step-hidden');
                     document.getElementById('footerApp').classList.remove('step-hidden');
                     actualizarContadores();
-                    decir("Carga validada. Inicie el escaneo.");
-                } else { 
-                    alert(data.msg); 
-                }
-            } catch(e) { 
-                alert("Error de conexión con el servidor"); 
-            }
+                } else { alert(data.msg); }
+            } catch(e) { alert("Error de conexión"); }
             btn.innerText = "OK";
         }
 
         async function actualizarContadores() {
-            const res = await fetch(GOOGLE_URL, {method:'POST', body: JSON.stringify({action:'obtenerResumen', nroCarga: currentCarga})});
-            const data = await res.json();
-            if(data.success) {
-                let cT=0, cS=0, uT=0, uS=0;
-                data.resumen.forEach(i => {
-                    if(i.um === "CAJA") { cT += i.total; cS += i.scan; }
-                    else { uT += i.total; uS += i.scan; }
-                });
-                document.getElementById('contadores').innerHTML = `${cS}/${cT} CA<br>${uS}/${uT} UN`;
-            }
+            try {
+                const res = await fetch(GOOGLE_URL, {method:'POST', body: JSON.stringify({action:'obtenerResumen', nroCarga: currentCarga})});
+                const data = await res.json();
+                if(data.success) {
+                    let cT=0, cS=0, uT=0, uS=0;
+                    data.resumen.forEach(i => {
+                        if(i.um === "CAJA") { cT += i.total; cS += i.scan; }
+                        else { uT += i.total; uS += i.scan; }
+                    });
+                    document.getElementById('contadores').innerHTML = `${cS}/${cT} CA<br>${uS}/${uT} UN`;
+                }
+            } catch(e) { console.log("Error contadores"); }
         }
 
         async function buscarArticulo() {
             const sku = document.getElementById('barcode').value;
             if(!sku) return;
-            
             const res = await fetch(GOOGLE_URL, {method:'POST', body: JSON.stringify({action:'buscarArticulo', nroCarga: currentCarga, barcode: sku})});
             const data = await res.json();
-            
             if(data.success) {
                 const cont = document.getElementById('contenedorUM');
                 cont.innerHTML = '';
-                // Punto 2: Manejo de múltiples líneas para un mismo SKU
                 data.opciones.forEach(op => {
                     const b = document.createElement('button');
-                    b.className = "w-full p-4 bg-white border border-blue-200 rounded-2xl font-bold text-blue-900 flex justify-between shadow-sm active:bg-blue-100";
+                    b.className = "w-full p-4 bg-white border border-blue-200 rounded-2xl font-bold flex justify-between shadow-sm";
                     b.innerHTML = `<span>${op.um}</span> <span class="text-xs text-blue-400">Faltan: ${op.total - op.actual}</span>`;
                     b.onclick = () => prepararRegistro(op);
                     cont.appendChild(b);
                 });
                 document.getElementById('secUM').classList.remove('step-hidden');
-                document.getElementById('secCantidad').classList.add('step-hidden');
-                decir("Artículo encontrado. Seleccione presentación.");
-            } else { 
-                alert(data.msg); 
-                decir("Sku no encontrado en carga."); 
-            }
+            } else { alert(data.msg); }
         }
 
         function prepararRegistro(item) {
@@ -167,114 +145,60 @@
             document.getElementById('txtDesc').innerText = `${item.desc} (${item.um})`;
             document.getElementById('secUM').classList.add('step-hidden');
             document.getElementById('secCantidad').classList.remove('step-hidden');
-            document.getElementById('cantInput').value = "";
             document.getElementById('cantInput').focus();
         }
 
         async function guardar() {
             const cant = document.getElementById('cantInput').value;
-            if(!cant || cant <= 0) return;
-
+            if(!cant) return;
             const res = await fetch(GOOGLE_URL, {method:'POST', body: JSON.stringify({
                 action:'registrarCantidad', nroCarga: currentCarga, barcode: selectedItem.sku, 
                 indexFila: selectedItem.index, cantidad: cant
             })});
             const data = await res.json();
-
             if(data.success) {
-                // Punto 7: Voz confirmando SKU y Cantidad
-                decir(`Registrado SKU ${selectedItem.sku}, cantidad ${cant}. ${data.msg}`);
-                addHistorial(selectedItem.sku, cant, selectedItem.um);
+                decir(`Registrado ${cant}`);
                 document.getElementById('secCantidad').classList.add('step-hidden');
                 document.getElementById('barcode').value = '';
                 actualizarContadores();
-            } else { 
-                alert(data.msg); 
             }
         }
 
-        function addHistorial(sku, c, um) {
-            const h = document.getElementById('historial');
-            const d = document.createElement('div');
-            d.className = "bg-white p-3 rounded-xl border-l-4 border-green-500 text-xs flex justify-between shadow-sm animate-fade-in";
-            d.innerHTML = `<span><b>${sku}</b> (${um})</span> <span class="font-bold text-green-700">+${c}</span>`;
-            h.prepend(d);
-        }
-
         async function abrirResumen() {
-            const res = await fetch(GOOGLE_URL, {method:'POST', body: JSON.stringify({action:'obtenerResumen', nroCarga: currentCarga})});
-            const data = await res.json();
-            const list = document.getElementById('listaResumen');
-            list.innerHTML = '';
-            data.resumen.forEach(i => {
-                const div = document.createElement('div');
-                div.className = "p-2 bg-slate-50 rounded-lg border border-slate-100";
-                div.innerHTML = `<div class="font-bold text-blue-900">${i.sku}</div><div class="text-[10px] text-slate-500">${i.desc}</div><div class="flex justify-between font-mono font-bold mt-1 text-slate-700"><span>${i.um}</span><span>${i.scan}/${i.total}</span></div>`;
-                list.appendChild(div);
-            });
             document.getElementById('modalResumen').classList.remove('step-hidden');
+            try {
+                const res = await fetch(GOOGLE_URL, {method:'POST', body: JSON.stringify({action:'obtenerResumen', nroCarga: currentCarga})});
+                const data = await res.json();
+                const list = document.getElementById('listaResumen');
+                list.innerHTML = '';
+                data.resumen.forEach(i => {
+                    const d = document.createElement('div');
+                    d.className = "p-2 bg-slate-50 rounded-lg border mb-2";
+                    d.innerHTML = `<div class="font-bold">${i.sku}</div><div class="flex justify-between text-[10px]"><span>${i.um}</span><span>${i.scan}/${i.total}</span></div>`;
+                    list.appendChild(d);
+                });
+            } catch(e) { alert("Error al cargar resumen"); }
         }
 
         function cerrarResumen() { 
             document.getElementById('modalResumen').classList.add('step-hidden'); 
         }
 
-        function confirmarFinalizar() {
-            if(confirm("¿Desea finalizar el conteo? Se generará el PDF y se borrará la carga del sistema.")) {
-                generarPDF();
-            }
-        }
+        function confirmarFinalizar() { if(confirm("¿Finalizar?")) generarPDF(); }
 
         async function generarPDF() {
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF();
             const res = await fetch(GOOGLE_URL, {method:'POST', body: JSON.stringify({action:'finalizarCarga', nroCarga: currentCarga})});
             const data = await res.json();
-            
-            // Estilo del Reporte PDF (Punto 11)
-            doc.setFontSize(18); doc.setTextColor(30, 58, 138); 
-            doc.text("REPORTE DE CONTROL DE CARGA M2", 10, 20);
-            doc.setFontSize(12); doc.setTextColor(100);
-            doc.text(`Carga Nro: ${currentCarga} | Fecha: ${new Date().toLocaleString()}`, 10, 30);
-            
-            let y = 50;
-            doc.setFontSize(10); doc.setTextColor(0);
-            doc.text("SKU        DESCRIPCIÓN          UM    TOT  SCAN  DIF", 10, y);
-            doc.line(10, y+2, 200, y+2);
-            y += 10;
-            
+            doc.text("REPORTE CARGA " + currentCarga, 10, 10);
+            let y = 20;
             data.reporte.slice(1).forEach(f => {
-                const total = parseInt(f[6]) || 0;
-                const scan = parseInt(f[7]) || 0;
-                const dif = total - scan;
-                doc.text(`${f[2]} | ${f[3].substring(0,18)} | ${f[5]} | ${total} | ${scan} | ${dif}`, 10, y);
-                y += 7;
-                if(y > 280) { doc.addPage(); y = 20; }
+                doc.text(`${f[2]} | ${f[5]} | ${f[7]||0}/${f[6]}`, 10, y);
+                y += 10;
             });
-            
-            doc.save(`CONTROL_M2_CARGA_${currentCarga}.pdf`);
-            decir("Proceso finalizado. Reporte guardado.");
-            setTimeout(() => {
-                window.onbeforeunload = null;
-                location.reload();
-            }, 3000);
-        }
-
-        function toggleCamara() {
-            const r = document.getElementById('reader');
-            if(r.classList.contains('hidden')) {
-                r.classList.remove('hidden');
-                html5QrScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 });
-                html5QrScanner.render(txt => {
-                    document.getElementById('barcode').value = txt;
-                    r.classList.add('hidden');
-                    html5QrScanner.clear();
-                    buscarArticulo();
-                });
-            } else {
-                r.classList.add('hidden');
-                if(html5QrScanner) html5QrScanner.clear();
-            }
+            doc.save(`CARGA_${currentCarga}.pdf`);
+            location.reload();
         }
     </script>
 </body>
