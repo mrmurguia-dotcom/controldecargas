@@ -10,6 +10,8 @@
     <style>
         .step-hidden { display: none !important; }
         #modalResumen { backdrop-filter: blur(4px); }
+        .mic-active { animation: pulse 1.5s infinite; background-color: #ef4444 !important; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
     </style>
 </head>
 <body class="bg-slate-100 min-h-screen pb-24">
@@ -54,7 +56,10 @@
 
         <section id="stepOperacion" class="step-hidden space-y-4">
             <div class="bg-white p-4 rounded-3xl shadow-sm border border-slate-200">
-                <label class="block text-xs font-bold text-slate-400 uppercase mb-2">Identificar Producto</label>
+                <div class="flex justify-between items-center mb-2">
+                    <label class="block text-xs font-bold text-slate-400 uppercase">Identificar Producto</label>
+                    <span id="palletDisplay" class="bg-orange-100 text-orange-700 px-3 py-1 rounded-full text-xs font-black">PALLET N° 1</span>
+                </div>
                 <div class="flex gap-2">
                     <input type="text" id="barcode" placeholder="SKU" class="flex-1 p-4 bg-yellow-50 rounded-2xl font-bold focus:outline-none">
                     <button onclick="buscarArticulo()" class="bg-blue-600 text-white px-4 rounded-2xl font-bold text-sm">OK</button>
@@ -69,13 +74,19 @@
             </div>
 
             <div id="secCantidad" class="step-hidden bg-white p-6 rounded-3xl shadow-xl border-t-4 border-blue-900">
-                <h2 id="txtArt" class="text-2xl font-black text-slate-900"></h2>
-                <p id="txtDesc" class="text-sm text-slate-500 mb-4"></p>
-                <div class="flex flex-col gap-3">
-                    <input type="number" id="nroPallet" placeholder="N° Pallet" class="w-full p-3 bg-slate-100 rounded-xl text-center font-bold focus:outline-none">
-                    <div class="flex gap-3">
-                        <input type="number" id="cantInput" placeholder="Cant" class="w-1/2 p-4 text-3xl font-black bg-slate-100 rounded-2xl text-center focus:outline-none">
+                <div class="flex justify-between items-start mb-2">
+                    <div>
+                        <h2 id="txtArt" class="text-2xl font-black text-slate-900"></h2>
+                        <p id="txtDesc" class="text-sm text-slate-500"></p>
+                    </div>
+                    <button onclick="cerrarPallet()" class="bg-orange-500 text-white px-3 py-2 rounded-xl text-[10px] font-bold">CERRAR PALLET</button>
+                </div>
+                
+                <div class="flex gap-3 mt-4">
+                    <input type="number" id="cantInput" placeholder="Cant" class="w-1/2 p-4 text-3xl font-black bg-slate-100 rounded-2xl text-center focus:outline-none">
+                    <div class="flex flex-col gap-2 flex-1">
                         <button onclick="guardar()" class="flex-1 bg-green-600 text-white rounded-2xl font-black text-lg">REGISTRAR</button>
+                        <button id="btnVoz" onclick="activarVoz()" class="bg-slate-200 text-slate-700 py-2 rounded-xl font-bold text-sm">🎙️ VOZ</button>
                     </div>
                 </div>
             </div>
@@ -98,13 +109,43 @@
     </div>
 
     <script>
-        // REEMPLAZA CON TU URL DE APPS SCRIPT
         const GOOGLE_URL = "https://script.google.com/macros/s/AKfycbzKjFlPsGUOP1QgLr2FkFvodke-czEuXRmhoLyYmj7a2bgp4ZGEiHNSek6EUhIteEk/exec"; 
         
         let currentCarga = "";
         let nombreOp = "";
         let selectedItem = null;
         let maleVoice = null;
+        let nroPalletActual = 1;
+
+        // --- LÓGICA DE VOZ ---
+        const recognition = (window.SpeechRecognition || window.webkitSpeechRecognition) ? new (window.SpeechRecognition || window.webkitSpeechRecognition)() : null;
+        if(recognition) {
+            recognition.lang = 'es-AR';
+            recognition.onresult = (event) => {
+                const texto = event.results[0][0].transcript;
+                const numero = texto.match(/\d+/);
+                if(numero) {
+                    document.getElementById('cantInput').value = numero[0];
+                    decir("Registrando " + numero[0]);
+                    guardar();
+                }
+                document.getElementById('btnVoz').classList.remove('mic-active');
+            };
+            recognition.onerror = () => document.getElementById('btnVoz').classList.remove('mic-active');
+        }
+
+        function activarVoz() {
+            if(!recognition) return alert("Voz no soportada");
+            document.getElementById('btnVoz').classList.add('mic-active');
+            recognition.start();
+        }
+
+        function cerrarPallet() {
+            nroPalletActual++;
+            document.getElementById('palletDisplay').innerText = `PALLET N° ${nroPalletActual}`;
+            decir("Pallet cerrado. Iniciando pallet " + nroPalletActual);
+            playBeep('ok');
+        }
 
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         function playBeep(type) {
@@ -203,13 +244,11 @@
 
         async function guardar() {
             const cant = parseInt(document.getElementById('cantInput').value);
-            const nroPallet = document.getElementById('nroPallet').value || "S/N";
             if(!cant) return;
 
             const finalEsperado = selectedItem.total;
             const finalEscaneado = selectedItem.actual + cant;
 
-            // Bloqueo de exceso [basado en la lógica que pediste]
             if (finalEscaneado > finalEsperado) {
                 playBeep('err');
                 decir("Error. Supera la cantidad.");
@@ -222,13 +261,12 @@
                 nroCarga: currentCarga, 
                 indexFila: selectedItem.index, 
                 nuevaSuma: finalEscaneado,
-                nroPallet: nroPallet
+                nroPallet: nroPalletActual
             })});
             
             const data = await res.json();
             if(data.success) {
                 playBeep('ok');
-                decir(`Registrado ${cant}`);
                 selectedItem.actual = finalEscaneado;
                 addHistorial(selectedItem.sku, cant, selectedItem.um, selectedItem.index);
                 document.getElementById('secCantidad').classList.add('step-hidden');
@@ -296,10 +334,17 @@
         function cerrarResumen() { document.getElementById('modalResumen').classList.add('step-hidden'); }
         
         async function confirmarFinalizar() { 
-            if(confirm("¿Finalizar y generar PDF?")) {
+            if(confirm("¿Finalizar carga? Se generará el PDF y se borrará la pestaña.")) {
+                // Obtenemos los datos para el PDF antes de borrar nada
                 const res = await fetch(GOOGLE_URL, {method:'POST', body: JSON.stringify({action:'obtenerResumen', nroCarga: currentCarga})});
                 const data = await res.json();
-                generarPDF(data.resumen);
+                
+                if(data.success) {
+                    generarPDF(data.resumen);
+                    // Avisamos al servidor que borre la pestaña
+                    await fetch(GOOGLE_URL, {method:'POST', body: JSON.stringify({action:'finalizarCarga', nroCarga: currentCarga})});
+                    setTimeout(() => location.reload(), 3000);
+                }
             }
         }
 
@@ -315,42 +360,14 @@
 
             let y = 50;
             doc.text("SKU", 10, y);
-            doc.text("UM", 60, y);
-            doc.text("SOLICITADO", 90, y);
-            doc.text("ESCANEADO", 130, y);
+            doc.text("UM", 80, y);
+            doc.text("SOLICITADO", 120, y);
+            doc.text("CONTADO", 160, y);
             doc.line(10, y+2, 200, y+2);
             y += 10;
 
             doc.setFont("helvetica", "normal");
             datos.forEach(f => {
                 doc.text(f.sku.toString(), 10, y);
-                doc.text(f.um.toString(), 60, y);
-                doc.text(f.total.toString(), 90, y);
-                doc.text(f.scan.toString(), 130, y);
-                y += 8;
-                if(y > 280) { doc.addPage(); y = 20; }
-            });
-
-            doc.save(`CARGA_${currentCarga}.pdf`);
-            
-            // Borrar de la planilla
-            fetch(GOOGLE_URL, {method:'POST', body: JSON.stringify({action:'finalizarCarga', nroCarga: currentCarga})});
-            setTimeout(() => location.reload(), 2000);
-        }
-
-        function toggleCamara() {
-            const r = document.getElementById('reader');
-            if(r.classList.contains('hidden')) {
-                r.classList.remove('hidden');
-                let scanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 });
-                scanner.render(txt => {
-                    document.getElementById('barcode').value = txt;
-                    r.classList.add('hidden');
-                    scanner.clear();
-                    buscarArticulo();
-                });
-            } else { r.classList.add('hidden'); }
-        }
-    </script>
-</body>
-</html>
+                doc.text(f.um.toString(), 80, y);
+                doc.text(f.total.toString(), 120,
