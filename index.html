@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CONTROL DE CARGAS - M2 v4.3</title>
+    <title>CONTROL DE CARGAS - M2</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/html5-qrcode"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -26,7 +26,7 @@
     <header class="bg-blue-900 text-white p-4 sticky top-0 z-50 shadow-md">
         <div class="max-w-md mx-auto flex justify-between items-center">
             <div>
-                <h1 class="font-black text-xl leading-tight">CONTROL DE CARGAS v4.3</h1>
+                <h1 class="font-black text-xl leading-tight">CONTROL DE CARGAS AMBALOG</h1>
                 <p class="text-[10px] text-blue-300 font-bold uppercase tracking-wider">M2 Consultoría Digital</p>
             </div>
             <div id="contadores" class="text-[10px] bg-blue-800 px-3 py-1 rounded-lg font-mono text-right">
@@ -46,6 +46,7 @@
                         <option value="Omar Dubi">Omar Dubi</option>
                         <option value="Jose Servin">Jose Servin</option>
                         <option value="Maxi Murray">Maxi Murray</option>
+                        <option value="Maxi Murray">Diego Murcia</option>
                         <option value="Otro">Otro...</option>
                     </select>
                     <input type="text" id="operadorOtro" placeholder="Nombre del verificador..." class="step-hidden w-full mt-2 p-4 bg-slate-50 rounded-2xl font-bold focus:outline-none border border-slate-200">
@@ -123,6 +124,17 @@
         let selectedItem = null;
         let nroPalletActual = 1;
         let html5QrCode = null;
+        let bloqueandoSalida = false; // Nueva variable de control
+
+        // --- PREVENIR SALIDA ---
+        window.addEventListener('beforeunload', function (e) {
+            if (bloqueandoSalida) {
+                // El mensaje personalizado es ignorado por la mayoría de navegadores modernos por seguridad, 
+                // pero activa el cuadro de diálogo estándar.
+                e.preventDefault();
+                e.returnValue = '';
+            }
+        });
 
         // --- SISTEMA DE VOZ ---
         const recognition = (window.SpeechRecognition || window.webkitSpeechRecognition) ? new (window.SpeechRecognition || window.webkitSpeechRecognition)() : null;
@@ -219,6 +231,7 @@
                 });
                 const data = await res.json();
                 if(data.success) {
+                    bloqueandoSalida = true; // ACTIVAMOS EL BLOQUEO AL INICIAR
                     document.getElementById('stepCarga').classList.add('step-hidden');
                     document.getElementById('stepOperacion').classList.remove('step-hidden');
                     document.getElementById('footerApp').classList.remove('step-hidden');
@@ -422,11 +435,9 @@
             document.getElementById('loader').style.display = 'flex';
 
             try {
-                // 1. Generar PDF (devuelve el objeto doc)
                 const doc = generarPDF(data.resumen);
                 const pdfBase64 = doc.output('datauristring').split(',')[1];
 
-                // 2. Guardar en Drive
                 const driveResp = await fetch(GOOGLE_URL, {
                     method: 'POST',
                     body: JSON.stringify({ 
@@ -437,17 +448,17 @@
                     })
                 });
                 
-                // 3. Descargar local (opcional)
                 doc.save(`Reporte_Carga_${currentCarga}.pdf`);
 
-                // 4. Borrar pestaña del sheet
                 await fetch(GOOGLE_URL, {
                     method: 'POST',
                     body: JSON.stringify({ action: 'finalizarCarga', nroCarga: currentCarga })
                 });
 
                 alert("Proceso completado: PDF guardado en Drive y carga finalizada.");
-                location.reload(); // ESTO SALE DE LA CARGA Y RESETEA LA APP
+                
+                bloqueandoSalida = false; // LIBERAMOS EL BLOQUEO PARA PODER RECARGAR
+                location.reload(); 
 
             } catch (err) {
                 alert("Error en el proceso final: " + err.message);
@@ -484,7 +495,6 @@
                 if(i.um.includes("CAJA")) tC += i.scan;
                 else tU += i.scan;
                 
-                // Sumar cajas de picking
                 if((i.pmph || "").toLowerCase().trim() === "picking" && i.um.includes("CAJA")) {
                     totalCajasPicking += i.scan;
                 }
@@ -526,7 +536,6 @@
                 y += 8;
             });
 
-            // Resumen de pallets (Picking)
             const resumenPallets = {};
             datos.forEach(item => {
                 if ((item.pmph || "").toLowerCase().trim() === "picking") {
@@ -557,7 +566,7 @@
                 });
             }
 
-            return doc; // Devolvemos el objeto para poder usarlo en el guardado a Drive
+            return doc;
         }
     </script>
 </body>
