@@ -19,7 +19,7 @@
     <header class="bg-blue-900 text-white p-4 sticky top-0 z-50 shadow-md">
         <div class="max-w-md mx-auto flex justify-between items-center">
             <div>
-                <h1 class="font-black text-xl leading-tight">CONTROL DE CARGAS</h1>
+                <h1 class="font-black text-xl leading-tight">CONTROL DE CARGAS v2</h1>
                 <p class="text-[10px] text-blue-300 font-bold uppercase tracking-wider">M2 Consultoría Digital</p>
             </div>
             <div id="contadores" class="text-[10px] bg-blue-800 px-3 py-1 rounded-lg font-mono text-right">
@@ -109,17 +109,14 @@
     </div>
 
     <script>
-        // --- CONFIGURACIÓN ---
         const GOOGLE_URL = "https://script.google.com/macros/s/AKfycbzKjFlPsGUOP1QgLr2FkFvodke-czEuXRmhoLyYmj7a2bgp4ZGEiHNSek6EUhIteEk/exec"; 
         
         let currentCarga = "";
         let nombreOp = "";
         let selectedItem = null;
-        let maleVoice = null;
         let nroPalletActual = 1;
         let html5QrCode = null;
 
-        // --- LÓGICA DE VOZ ---
         const recognition = (window.SpeechRecognition || window.webkitSpeechRecognition) ? new (window.SpeechRecognition || window.webkitSpeechRecognition)() : null;
         if(recognition) {
             recognition.lang = 'es-AR';
@@ -142,7 +139,6 @@
             recognition.start();
         }
 
-        // --- SONIDOS ---
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         function playBeep(type) {
             if(audioCtx.state === 'suspended') audioCtx.resume();
@@ -166,7 +162,6 @@
             window.speechSynthesis.speak(u); 
         }
 
-        // --- CÁMARA ---
         function toggleCamara() {
             const readerDiv = document.getElementById('reader');
             if (readerDiv.classList.contains('hidden')) {
@@ -192,7 +187,6 @@
             }
         }
 
-        // --- ACCIONES PRINCIPALES ---
         function verificarOperador() {
             const val = document.getElementById('operadorSelect').value;
             if(val === "Otro") document.getElementById('operadorOtro').classList.remove('step-hidden');
@@ -203,50 +197,37 @@
             const sel = document.getElementById('operadorSelect').value;
             nombreOp = sel === "Otro" ? document.getElementById('operadorOtro').value : sel;
             currentCarga = document.getElementById('nroCarga').value;
-            
             if(!nombreOp || !currentCarga) return alert("Complete Verificador y Nro Carga.");
-            
             const btn = document.getElementById('btnIniciar');
             btn.innerText = "⏳";
             btn.disabled = true;
-
             try {
                 const res = await fetch(GOOGLE_URL, {
                     method: 'POST',
                     body: JSON.stringify({ action: 'validarCarga', nroCarga: currentCarga })
                 });
                 const data = await res.json();
-                
                 if(data.success) {
                     document.getElementById('stepCarga').classList.add('step-hidden');
                     document.getElementById('stepOperacion').classList.remove('step-hidden');
                     document.getElementById('footerApp').classList.remove('step-hidden');
                     actualizarContadores();
-                } else {
-                    alert(data.msg || "Carga no encontrada");
-                }
-            } catch(e) {
-                alert("Error de conexión. Verifica la URL del script.");
-            } finally {
-                btn.innerText = "OK";
-                btn.disabled = false;
-            }
+                } else { alert(data.msg || "Carga no encontrada"); }
+            } catch(e) { alert("Error de conexión."); }
+            finally { btn.innerText = "OK"; btn.disabled = false; }
         }
 
         async function buscarArticulo() {
             const sku = document.getElementById('barcode').value;
             if(!sku) return;
-            
             const res = await fetch(GOOGLE_URL, {
                 method: 'POST',
                 body: JSON.stringify({ action: 'buscarArticulo', nroCarga: currentCarga, barcode: sku })
             });
             const data = await res.json();
-            
             if(data.success) {
-                if(data.opciones.length === 1) {
-                    prepararRegistro(data.opciones[0]);
-                } else {
+                if(data.opciones.length === 1) { prepararRegistro(data.opciones[0]); }
+                else {
                     const cont = document.getElementById('contenedorUM');
                     cont.innerHTML = '';
                     data.opciones.forEach(op => {
@@ -258,10 +239,7 @@
                     });
                     document.getElementById('secUM').classList.remove('step-hidden');
                 }
-            } else { 
-                playBeep('err');
-                alert(data.msg); 
-            }
+            } else { playBeep('err'); alert(data.msg); }
         }
 
         function prepararRegistro(item) {
@@ -277,15 +255,11 @@
         async function guardar() {
             const cant = parseInt(document.getElementById('cantInput').value);
             if(!cant) return;
-
             const finalEscaneado = (selectedItem.actual || 0) + cant;
-
             if (finalEscaneado > selectedItem.total) {
-                playBeep('err');
-                decir("Supera la cantidad");
+                playBeep('err'); decir("Supera la cantidad");
                 return alert("Error: La cantidad supera lo solicitado.");
             }
-
             const res = await fetch(GOOGLE_URL, {
                 method: 'POST',
                 body: JSON.stringify({
@@ -296,7 +270,6 @@
                     nroPallet: nroPalletActual
                 })
             });
-            
             const data = await res.json();
             if(data.success) {
                 playBeep('ok');
@@ -312,7 +285,7 @@
             const list = document.getElementById('historial');
             const d = document.createElement('div');
             d.className = "bg-white p-3 rounded-xl border border-slate-200 text-sm flex justify-between items-center shadow-sm mb-2";
-            d.innerHTML = `<div><b>${sku}</b> (${um})</div><div class="font-black text-green-600">+${c}</div>`;
+            d.innerHTML = `<div><b>${sku}</b> (${um}) - P${nroPalletActual}</div><div class="font-black text-green-600">+${c}</div>`;
             list.prepend(d);
         }
 
@@ -348,23 +321,13 @@
             const data = await res.json();
             const list = document.getElementById('listaResumen');
             list.innerHTML = '';
-
             data.resumen.forEach(i => {
                 const d = document.createElement('div');
-                
-                // Determinamos si el SKU está completo o tiene diferencias
                 const esCorrecto = i.scan === i.total;
                 const bgColor = esCorrecto ? 'bg-green-100 border-green-300' : 'bg-red-100 border-red-300';
                 const textColor = esCorrecto ? 'text-green-800' : 'text-red-800';
-
                 d.className = `p-3 rounded-xl border mb-2 text-xs shadow-sm ${bgColor} ${textColor}`;
-                d.innerHTML = `
-                    <div class="flex justify-between items-center mb-1">
-                        <b class="text-sm">${i.sku}</b>
-                        <span class="font-black uppercase">${esCorrecto ? '✓ OK' : '⚠ Dif'}</span>
-                    </div>
-                    <div>${i.um}: <b>${i.scan}</b> de ${i.total}</div>
-                `;
+                d.innerHTML = `<div class="flex justify-between items-center mb-1"><b class="text-sm">${i.sku}</b><span class="font-black uppercase">${esCorrecto ? '✓ OK' : '⚠ Dif'}</span></div><div>${i.um}: <b>${i.scan}</b> de ${i.total}</div>`;
                 list.appendChild(d);
             });
         }
@@ -391,27 +354,96 @@
         function generarPDF(datos) {
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF();
-            doc.setFontSize(18);
-            doc.text("REPORTE DE CARGA: " + currentCarga, 10, 20);
-            doc.setFontSize(12);
-            doc.text("Verificador: " + nombreOp, 10, 30);
-            doc.text("Fecha: " + new Date().toLocaleString(), 10, 40);
             
-            let y = 60;
-            doc.text("SKU", 10, y);
-            doc.text("UM", 80, y);
-            doc.text("CONTADO", 150, y);
-            doc.line(10, y+2, 200, y+2);
+            // --- ENCABEZADO ---
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(22);
+            doc.text("REPORTE DE CONTROL DE CARGA", 14, 20);
+            
+            doc.setFontSize(12);
+            doc.text("Verificador: ", 14, 32);
+            doc.setFont("helvetica", "normal");
+            doc.text(nombreOp, 40, 32);
+            
+            doc.setFont("helvetica", "bold");
+            doc.text("Carga Nro: ", 14, 40);
+            doc.setFont("helvetica", "normal");
+            doc.text(currentCarga, 40, 40);
+            
+            const f = new Date();
+            const fStr = `${f.toLocaleDateString()} ${f.getHours().toString().padStart(2,'0')}:${f.getMinutes().toString().padStart(2,'0')}:${f.getSeconds().toString().padStart(2,'0')}`;
+            doc.setFontSize(10);
+            doc.text(`Fecha Impresión: ${fStr}`, 14, 48);
+
+            let tC = 0, tU = 0;
+            datos.forEach(i => {
+                if(i.um.includes("CAJA")) tC += i.scan;
+                else tU += i.scan;
+            });
+            doc.setFont("helvetica", "bold");
+            doc.text(`TOTAL CONTROLADO -> CAJAS: ${tC} | UNIDADES: ${tU}`, 14, 56);
+            
+            // --- TABLA ---
+            let y = 68;
+            doc.setFontSize(9);
+            doc.text("SKU", 14, y);
+            doc.text("DESCRIPCION", 35, y);
+            doc.text("UM", 95, y);
+            doc.text("PALLET", 115, y);
+            doc.text("TOTAL", 140, y);
+            doc.text("CONT", 165, y);
+            doc.text("CHECK", 185, y);
+            
+            doc.setLineWidth(0.5);
+            doc.line(14, y + 2, 200, y + 2);
             
             y += 10;
+            
             datos.forEach(item => {
-                if(y > 280) { doc.addPage(); y = 20; }
-                doc.text(item.sku.toString(), 10, y);
-                doc.text(item.um.toString(), 80, y);
-                doc.text(item.scan.toString() + " / " + item.total.toString(), 150, y);
+                if(y > 275) {
+                    doc.addPage();
+                    y = 20;
+                }
+                
+                // Si hay diferencia, resaltamos en negrita
+                const hayDiferencia = item.scan !== item.total;
+                if(hayDiferencia) {
+                    doc.setFont("helvetica", "bold");
+                } else {
+                    doc.setFont("helvetica", "normal");
+                }
+
+                doc.text(String(item.sku), 14, y);
+                
+                let desc = item.desc || "";
+                if(desc.length > 28) desc = desc.substring(0, 26) + "..";
+                doc.text(desc, 35, y);
+                
+                doc.text(String(item.um), 95, y);
+                doc.text(String(item.pallet || "1"), 115, y);
+                doc.text(String(item.total), 140, y);
+                doc.text(String(item.scan), 165, y);
+                
+                if(!hayDiferencia) {
+                    doc.setFont("helvetica", "bold"); // OK siempre en negrita para destacar
+                    doc.text("OK v", 185, y);
+                } else {
+                    doc.text("DIF", 185, y);
+                }
+                
                 y += 8;
             });
-            doc.save(`Carga_${currentCarga}.pdf`);
+
+            // --- PIE DE PÁGINA (FOLIOS) ---
+            const pageCount = doc.internal.getNumberOfPages();
+            for(let i = 1; i <= pageCount; i++) {
+                doc.setPage(i);
+                doc.setFont("helvetica", "normal");
+                doc.setFontSize(10);
+                doc.text(`Hoja ${i} de ${pageCount}`, 105, 290, { align: "center" });
+            }
+
+            doc.save(`Reporte_Carga_${currentCarga}.pdf`);
         }
     </script>
 </body>
