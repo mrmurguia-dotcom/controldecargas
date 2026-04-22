@@ -20,10 +20,10 @@
         <div class="max-w-md mx-auto flex justify-between items-center">
             <div>
                 <h1 class="font-black text-xl leading-tight">CONTROL DE CARGAS</h1>
-                <p class="text-[10px] text-blue-300 font-bold uppercase tracking-wider">Creado por M2 Consultoría Digital</p>
+                <p class="text-[10px] text-blue-300 font-bold uppercase tracking-wider">M2 Consultoría Digital</p>
             </div>
             <div id="contadores" class="text-[10px] bg-blue-800 px-3 py-1 rounded-lg font-mono text-right">
-                INICIAR...
+                ESPERANDO...
             </div>
         </div>
     </header>
@@ -109,13 +109,15 @@
     </div>
 
     <script>
-        const GOOGLE_URL = "https://script.google.com/macros/s/AKfycbzKjFlPsGUOP1QgLr2FkFvodke-czEuXRmhoLyYmj7a2bgp4ZGEiHNSek6EUhIteEk/exec"; 
+        // --- CONFIGURACIÓN ---
+        const GOOGLE_URL = "TU_URL_AQUI_EJECUTABLE"; 
         
         let currentCarga = "";
         let nombreOp = "";
         let selectedItem = null;
         let maleVoice = null;
         let nroPalletActual = 1;
+        let html5QrCode = null;
 
         // --- LÓGICA DE VOZ ---
         const recognition = (window.SpeechRecognition || window.webkitSpeechRecognition) ? new (window.SpeechRecognition || window.webkitSpeechRecognition)() : null;
@@ -140,13 +142,7 @@
             recognition.start();
         }
 
-        function cerrarPallet() {
-            nroPalletActual++;
-            document.getElementById('palletDisplay').innerText = `PALLET N° ${nroPalletActual}`;
-            decir("Pallet cerrado. Iniciando pallet " + nroPalletActual);
-            playBeep('ok');
-        }
-
+        // --- SONIDOS ---
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         function playBeep(type) {
             if(audioCtx.state === 'suspended') audioCtx.resume();
@@ -164,18 +160,39 @@
             }
         }
 
-        window.speechSynthesis.onvoiceschanged = () => {
-            const voces = window.speechSynthesis.getVoices();
-            maleVoice = voces.find(v => v.lang.includes('es') && /pablo|diego|jorge|male|hombre/i.test(v.name));
-        };
-
         function decir(t) { 
             const u = new SpeechSynthesisUtterance(t); 
             u.lang = 'es-AR'; 
-            if(maleVoice) u.voice = maleVoice;
             window.speechSynthesis.speak(u); 
         }
 
+        // --- CÁMARA ---
+        function toggleCamara() {
+            const readerDiv = document.getElementById('reader');
+            if (readerDiv.classList.contains('hidden')) {
+                readerDiv.classList.remove('hidden');
+                html5QrCode = new Html5Qrcode("reader");
+                html5QrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 }, 
+                    (decodedText) => {
+                        document.getElementById('barcode').value = decodedText;
+                        buscarArticulo();
+                        pararCamara();
+                    }
+                );
+            } else {
+                pararCamara();
+            }
+        }
+
+        function pararCamara() {
+            if (html5QrCode) {
+                html5QrCode.stop().then(() => {
+                    document.getElementById('reader').classList.add('hidden');
+                });
+            }
+        }
+
+        // --- ACCIONES PRINCIPALES ---
         function verificarOperador() {
             const val = document.getElementById('operadorSelect').value;
             if(val === "Otro") document.getElementById('operadorOtro').classList.remove('step-hidden');
@@ -186,34 +203,48 @@
             const sel = document.getElementById('operadorSelect').value;
             nombreOp = sel === "Otro" ? document.getElementById('operadorOtro').value : sel;
             currentCarga = document.getElementById('nroCarga').value;
-            if(!nombreOp || !currentCarga) return alert("Complete los datos.");
+            
+            if(!nombreOp || !currentCarga) return alert("Complete Verificador y Nro Carga.");
             
             const btn = document.getElementById('btnIniciar');
             btn.innerText = "⏳";
+            btn.disabled = true;
+
             try {
-                const res = await fetch(GOOGLE_URL, {method:'POST', body: JSON.stringify({action:'validarCarga', nroCarga: currentCarga})});
+                const res = await fetch(GOOGLE_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ action: 'validarCarga', nroCarga: currentCarga })
+                });
                 const data = await res.json();
+                
                 if(data.success) {
                     document.getElementById('stepCarga').classList.add('step-hidden');
                     document.getElementById('stepOperacion').classList.remove('step-hidden');
                     document.getElementById('footerApp').classList.remove('step-hidden');
                     actualizarContadores();
-                } else { alert(data.msg); }
-            } catch(e) { alert("Error de conexión"); }
-            btn.innerText = "OK";
+                } else {
+                    alert(data.msg || "Carga no encontrada");
+                }
+            } catch(e) {
+                alert("Error de conexión. Verifica la URL del script.");
+            } finally {
+                btn.innerText = "OK";
+                btn.disabled = false;
+            }
         }
 
         async function buscarArticulo() {
             const sku = document.getElementById('barcode').value;
             if(!sku) return;
-            decir("SKU " + sku);
             
-            const res = await fetch(GOOGLE_URL, {method:'POST', body: JSON.stringify({action:'buscarArticulo', nroCarga: currentCarga, barcode: sku})});
+            const res = await fetch(GOOGLE_URL, {
+                method: 'POST',
+                body: JSON.stringify({ action: 'buscarArticulo', nroCarga: currentCarga, barcode: sku })
+            });
             const data = await res.json();
             
             if(data.success) {
                 if(data.opciones.length === 1) {
-                    decir(data.opciones[0].um);
                     prepararRegistro(data.opciones[0]);
                 } else {
                     const cont = document.getElementById('contenedorUM');
@@ -221,8 +252,8 @@
                     data.opciones.forEach(op => {
                         const b = document.createElement('button');
                         b.className = "w-full p-4 bg-white border border-blue-200 rounded-2xl font-black text-xl text-center";
-                        b.innerHTML = `${op.um}`;
-                        b.onclick = () => { decir(op.um); prepararRegistro(op); };
+                        b.innerText = op.um;
+                        b.onclick = () => prepararRegistro(op);
                         cont.appendChild(b);
                     });
                     document.getElementById('secUM').classList.remove('step-hidden');
@@ -240,134 +271,135 @@
             document.getElementById('secUM').classList.add('step-hidden');
             document.getElementById('secCantidad').classList.remove('step-hidden');
             document.getElementById('cantInput').focus();
+            decir(item.um);
         }
 
         async function guardar() {
             const cant = parseInt(document.getElementById('cantInput').value);
             if(!cant) return;
 
-            const finalEsperado = selectedItem.total;
-            const finalEscaneado = selectedItem.actual + cant;
+            const finalEscaneado = (selectedItem.actual || 0) + cant;
 
-            if (finalEscaneado > finalEsperado) {
+            if (finalEscaneado > selectedItem.total) {
                 playBeep('err');
-                decir("Error. Supera la cantidad.");
-                alert(`No puedes registrar ${cant}. El máximo restante es ${finalEsperado - selectedItem.actual}.`);
-                return;
+                decir("Supera la cantidad");
+                return alert("Error: La cantidad supera lo solicitado.");
             }
 
-            const res = await fetch(GOOGLE_URL, {method:'POST', body: JSON.stringify({
-                action:'registrarCantidad', 
-                nroCarga: currentCarga, 
-                indexFila: selectedItem.index, 
-                nuevaSuma: finalEscaneado,
-                nroPallet: nroPalletActual
-            })});
+            const res = await fetch(GOOGLE_URL, {
+                method: 'POST',
+                body: JSON.stringify({
+                    action: 'registrarCantidad', 
+                    nroCarga: currentCarga, 
+                    indexFila: selectedItem.index, 
+                    nuevaSuma: finalEscaneado,
+                    nroPallet: nroPalletActual
+                })
+            });
             
             const data = await res.json();
             if(data.success) {
                 playBeep('ok');
-                selectedItem.actual = finalEscaneado;
-                addHistorial(selectedItem.sku, cant, selectedItem.um, selectedItem.index);
+                addHistorial(selectedItem.sku, cant, selectedItem.um);
                 document.getElementById('secCantidad').classList.add('step-hidden');
                 document.getElementById('barcode').value = '';
-                document.getElementById('cantInput').value = '';
+                document.getElementById('barcode').focus();
                 actualizarContadores();
-            } else {
-                alert(data.msg);
             }
         }
 
-        function addHistorial(sku, c, um, idFila) {
+        function addHistorial(sku, c, um) {
             const list = document.getElementById('historial');
-            const divId = "hist-" + Date.now();
             const d = document.createElement('div');
-            d.id = divId;
             d.className = "bg-white p-3 rounded-xl border border-slate-200 text-sm flex justify-between items-center shadow-sm mb-2";
-            d.innerHTML = `
-                <div><span class="font-bold text-blue-900">${sku}</span> <span class="text-xs text-slate-500">(${um})</span></div>
-                <div class="flex items-center gap-3">
-                    <span class="font-black text-green-600">+${c}</span>
-                    <button onclick="anularRegistro(${idFila}, ${c}, '${divId}')" class="bg-red-50 text-red-600 p-2 rounded-lg font-bold text-[10px]">❌</button>
-                </div>
-            `;
+            d.innerHTML = `<div><b>${sku}</b> (${um})</div><div class="font-black text-green-600">+${c}</div>`;
             list.prepend(d);
         }
 
-        async function anularRegistro(indexFila, cantidad, htmlId) {
-            if(!confirm("¿Anular este registro?")) return;
-            await fetch(GOOGLE_URL, {method:'POST', body: JSON.stringify({
-                action:'anularRegistro', nroCarga: currentCarga, indexFila: indexFila, cantidad: cantidad
-            })});
-            document.getElementById(htmlId).remove();
-            decir("Anulado");
-            actualizarContadores();
-        }
-
         async function actualizarContadores() {
-            const res = await fetch(GOOGLE_URL, {method:'POST', body: JSON.stringify({action:'obtenerResumen', nroCarga: currentCarga})});
+            const res = await fetch(GOOGLE_URL, {
+                method: 'POST',
+                body: JSON.stringify({ action: 'obtenerResumen', nroCarga: currentCarga })
+            });
             const data = await res.json();
             if(data.success) {
                 let cT=0, cS=0, uT=0, uS=0;
                 data.resumen.forEach(i => {
-                    if(i.um === "CAJA") { cT += i.total; cS += i.scan; }
+                    if(i.um.includes("CAJA")) { cT += i.total; cS += i.scan; }
                     else { uT += i.total; uS += i.scan; }
                 });
                 document.getElementById('contadores').innerHTML = `${cS}/${cT} CA<br>${uS}/${uT} UN`;
             }
         }
 
+        function cerrarPallet() {
+            nroPalletActual++;
+            document.getElementById('palletDisplay').innerText = `PALLET N° ${nroPalletActual}`;
+            decir("Pallet cerrado");
+            playBeep('ok');
+        }
+
         async function abrirResumen() {
             document.getElementById('modalResumen').classList.remove('step-hidden');
-            const res = await fetch(GOOGLE_URL, {method:'POST', body: JSON.stringify({action:'obtenerResumen', nroCarga: currentCarga})});
+            const res = await fetch(GOOGLE_URL, {
+                method: 'POST', 
+                body: JSON.stringify({action:'obtenerResumen', nroCarga: currentCarga})
+            });
             const data = await res.json();
             const list = document.getElementById('listaResumen');
             list.innerHTML = '';
             data.resumen.forEach(i => {
                 const d = document.createElement('div');
-                d.className = "p-2 bg-slate-50 rounded-lg border mb-2";
-                d.innerHTML = `<div class="font-bold text-xs">${i.sku}</div><div class="flex justify-between text-[10px]"><span>${i.um}</span><span>${i.scan}/${i.total}</span></div>`;
+                d.className = "p-2 bg-slate-50 rounded-lg border mb-2 text-xs";
+                d.innerHTML = `<b>${i.sku}</b><br>${i.um}: ${i.scan}/${i.total}`;
                 list.appendChild(d);
             });
         }
 
         function cerrarResumen() { document.getElementById('modalResumen').classList.add('step-hidden'); }
-        
-        async function confirmarFinalizar() { 
-            if(confirm("¿Finalizar carga? Se generará el PDF y se borrará la pestaña.")) {
-                // Obtenemos los datos para el PDF antes de borrar nada
-                const res = await fetch(GOOGLE_URL, {method:'POST', body: JSON.stringify({action:'obtenerResumen', nroCarga: currentCarga})});
+
+        async function confirmarFinalizar() {
+            if(confirm("¿Finalizar carga y generar PDF?")) {
+                const res = await fetch(GOOGLE_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ action: 'obtenerResumen', nroCarga: currentCarga })
+                });
                 const data = await res.json();
-                
-                if(data.success) {
-                    generarPDF(data.resumen);
-                    // Avisamos al servidor que borre la pestaña
-                    await fetch(GOOGLE_URL, {method:'POST', body: JSON.stringify({action:'finalizarCarga', nroCarga: currentCarga})});
-                    setTimeout(() => location.reload(), 3000);
-                }
+                generarPDF(data.resumen);
+                await fetch(GOOGLE_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ action: 'finalizarCarga', nroCarga: currentCarga })
+                });
+                alert("Carga Finalizada");
+                location.reload();
             }
         }
 
         function generarPDF(datos) {
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF();
+            doc.setFontSize(18);
+            doc.text("REPORTE DE CARGA: " + currentCarga, 10, 20);
+            doc.setFontSize(12);
+            doc.text("Verificador: " + nombreOp, 10, 30);
+            doc.text("Fecha: " + new Date().toLocaleString(), 10, 40);
             
-            doc.setFont("helvetica", "bold");
-            doc.text("REPORTE DE CONTROL DE CARGA", 10, 20);
-            doc.setFontSize(10);
-            doc.text(`Verificador: ${nombreOp} | Carga: ${currentCarga}`, 10, 30);
-            doc.text(`Fecha: ${new Date().toLocaleString()}`, 10, 36);
-
-            let y = 50;
+            let y = 60;
             doc.text("SKU", 10, y);
             doc.text("UM", 80, y);
-            doc.text("SOLICITADO", 120, y);
-            doc.text("CONTADO", 160, y);
+            doc.text("CONTADO", 150, y);
             doc.line(10, y+2, 200, y+2);
+            
             y += 10;
-
-            doc.setFont("helvetica", "normal");
-            datos.forEach(f => {
-                doc.text(f.sku.toString(), 10, y);
-                doc.text(f.um.toString(), 80, y);
-                doc.text(f.total.toString(), 120,
+            datos.forEach(item => {
+                if(y > 280) { doc.addPage(); y = 20; }
+                doc.text(item.sku.toString(), 10, y);
+                doc.text(item.um.toString(), 80, y);
+                doc.text(item.scan.toString() + " / " + item.total.toString(), 150, y);
+                y += 8;
+            });
+            doc.save(`Carga_${currentCarga}.pdf`);
+        }
+    </script>
+</body>
+</html>
