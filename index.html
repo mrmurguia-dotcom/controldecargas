@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CONTROL DE CARGAS - M2 v4.2</title>
+    <title>CONTROL DE CARGAS - M2 v4.3</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/html5-qrcode"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -12,14 +12,21 @@
         #modalResumen { backdrop-filter: blur(4px); }
         .mic-active { animation: pulse 1.5s infinite; background-color: #ef4444 !important; }
         @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+        /* Loader para el proceso de finalización */
+        #loader { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 200; align-items: center; justify-content: center; color: white; flex-direction: column; }
     </style>
 </head>
 <body class="bg-slate-100 min-h-screen pb-24">
 
+    <div id="loader">
+        <div class="animate-spin rounded-full h-16 w-16 border-t-4 border-white mb-4"></div>
+        <p class="font-bold">Procesando Reporte y Drive...</p>
+    </div>
+
     <header class="bg-blue-900 text-white p-4 sticky top-0 z-50 shadow-md">
         <div class="max-w-md mx-auto flex justify-between items-center">
             <div>
-                <h1 class="font-black text-xl leading-tight">CONTROL DE CARGAS v4.2</h1>
+                <h1 class="font-black text-xl leading-tight">CONTROL DE CARGAS v4.3</h1>
                 <p class="text-[10px] text-blue-300 font-bold uppercase tracking-wider">M2 Consultoría Digital</p>
             </div>
             <div id="contadores" class="text-[10px] bg-blue-800 px-3 py-1 rounded-lg font-mono text-right">
@@ -227,7 +234,6 @@
 
             let params = { action: 'buscarArticulo', nroCarga: currentCarga, barcode: rawValue };
 
-            // DETECCIÓN DE ETIQUETA DE PALLET (30-36 caracteres)
             if (rawValue.length >= 30) {
                 try {
                     const itm = parseInt(rawValue.substring(1, 9), 10).toString();
@@ -334,7 +340,6 @@
         async function borrarRegistro(sku, cant, index, totalActualEnSheet, divId) {
             if(!confirm(`¿Borrar el ingreso de ${cant} para ${sku}?`)) return;
             const nuevaSuma = totalActualEnSheet - cant;
-            
             const res = await fetch(GOOGLE_URL, {
                 method: 'POST',
                 body: JSON.stringify({
@@ -398,6 +403,7 @@
 
         function cerrarResumen() { document.getElementById('modalResumen').classList.add('step-hidden'); }
 
+        // --- FINALIZACIÓN Y PDF ---
         async function confirmarFinalizar() {
             const res = await fetch(GOOGLE_URL, {
                 method: 'POST',
@@ -406,21 +412,48 @@
             const data = await res.json();
             
             const diferencias = data.resumen.filter(i => i.scan !== i.total).length;
-            
             if(diferencias > 0) {
                 decir("Atención. Tenés " + diferencias + " diferencias.");
-                if(!confirm(`¡CUIDADO! Hay ${diferencias} artículos con diferencias.\n\n¿Estás seguro de finalizar e imprimir reporte?`)) return;
+                if(!confirm(`¡CUIDADO! Hay ${diferencias} artículos con diferencias.\n\n¿Deseas finalizar y subir reporte a Drive?`)) return;
             } else {
-                if(!confirm("¿Finalizar carga y generar PDF?")) return;
+                if(!confirm("¿Finalizar carga y generar PDF en Drive?")) return;
             }
 
-            generarPDF(data.resumen);
-            await fetch(GOOGLE_URL, {
-                method: 'POST',
-                body: JSON.stringify({ action: 'finalizarCarga', nroCarga: currentCarga })
-            });
-            alert("Carga Finalizada");
-            location.reload();
+            document.getElementById('loader').style.display = 'flex';
+
+            try {
+                // 1. Generar PDF (devuelve el objeto doc)
+                const doc = generarPDF(data.resumen);
+                const pdfBase64 = doc.output('datauristring').split(',')[1];
+
+                // 2. Guardar en Drive
+                const driveResp = await fetch(GOOGLE_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ 
+                        action: 'guardarPDF', 
+                        nroCarga: currentCarga, 
+                        base64: pdfBase64, 
+                        nombreArchivo: `Reporte_Carga_${currentCarga}_${nombreOp}.pdf` 
+                    })
+                });
+                
+                // 3. Descargar local (opcional)
+                doc.save(`Reporte_Carga_${currentCarga}.pdf`);
+
+                // 4. Borrar pestaña del sheet
+                await fetch(GOOGLE_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ action: 'finalizarCarga', nroCarga: currentCarga })
+                });
+
+                alert("Proceso completado: PDF guardado en Drive y carga finalizada.");
+                location.reload(); // ESTO SALE DE LA CARGA Y RESETEA LA APP
+
+            } catch (err) {
+                alert("Error en el proceso final: " + err.message);
+            } finally {
+                document.getElementById('loader').style.display = 'none';
+            }
         }
 
         function generarPDF(datos) {
@@ -446,15 +479,24 @@
             doc.setFont("helvetica", "normal");
             doc.text(`Fecha Impresión: ${fStr}`, 14, 48);
 
-            let tC = 0, tU = 0;
+            let tC = 0, tU = 0, totalCajasPicking = 0;
             datos.forEach(i => {
                 if(i.um.includes("CAJA")) tC += i.scan;
                 else tU += i.scan;
+                
+                // Sumar cajas de picking
+                if((i.pmph || "").toLowerCase().trim() === "picking" && i.um.includes("CAJA")) {
+                    totalCajasPicking += i.scan;
+                }
             });
+
             doc.setFont("helvetica", "bold");
             doc.text(`TOTAL CONTROLADO -> CAJAS: ${tC} | UNIDADES: ${tU}`, 14, 56);
+            doc.setTextColor(200, 0, 0);
+            doc.text(`TOTAL CAJAS PICKING: ${totalCajasPicking}`, 14, 63);
+            doc.setTextColor(0, 0, 0);
             
-            let y = 68;
+            let y = 72;
             doc.setFontSize(9);
             doc.text("SKU", 14, y);
             doc.text("DESCRIPCION", 35, y);
@@ -472,7 +514,6 @@
                 if(y > 275) { doc.addPage(); y = 20; }
                 const hayDiferencia = item.scan !== item.total;
                 doc.setFont("helvetica", hayDiferencia ? "bold" : "normal");
-
                 doc.text(String(item.sku), 14, y);
                 let desc = item.desc || "";
                 if(desc.length > 25) desc = desc.substring(0, 23) + "..";
@@ -481,70 +522,42 @@
                 doc.text(String(item.total), 110, y);
                 doc.text(String(item.scan), 130, y);
                 doc.text(hayDiferencia ? "DIF" : "OK", 155, y);
-                
-                let p = String(item.pallet || "-");
-                if(p.includes(",")) p = p.split(",")[0].trim();
-                doc.text(p, 178, y);
-
+                doc.text(String(item.pallet || "-"), 178, y);
                 y += 8;
             });
 
-            // --- NUEVO: RESUMEN DE PALLETS (SOLO PICKING) ---
+            // Resumen de pallets (Picking)
             const resumenPallets = {};
-            
             datos.forEach(item => {
-                // Asumimos que el backend envía la propiedad 'pmph' con el valor de la columna D
-                const tipoPmph = (item.pmph || "").toLowerCase().trim();
-                
-                if (tipoPmph === "picking") {
-                    let p = String(item.pallet || "Sin Asignar");
-                    if(p.includes(",")) p = p.split(",")[0].trim(); // Por si hay varios pallets, toma el principal
-                    
-                    if (p !== "-" && p !== "") {
-                        if (!resumenPallets[p]) {
-                            resumenPallets[p] = { CA: 0, UN: 0 };
-                        }
-                        if (item.um.toUpperCase().includes("CAJA")) {
-                            resumenPallets[p].CA += item.scan;
-                        } else {
-                            resumenPallets[p].UN += item.scan;
-                        }
+                if ((item.pmph || "").toLowerCase().trim() === "picking") {
+                    let p = String(item.pallet || "-");
+                    if(p !== "-" && p !== "") {
+                        if (!resumenPallets[p]) resumenPallets[p] = { CA: 0, UN: 0 };
+                        if (item.um.includes("CAJA")) resumenPallets[p].CA += item.scan;
+                        else resumenPallets[p].UN += item.scan;
                     }
                 }
             });
 
-            const palletsKeys = Object.keys(resumenPallets).sort((a, b) => parseInt(a) - parseInt(b));
-            
-            if (palletsKeys.length > 0) {
+            const keys = Object.keys(resumenPallets).sort((a,b)=> parseInt(a)-parseInt(b));
+            if(keys.length > 0) {
                 y += 5;
-                if(y > 260) { doc.addPage(); y = 20; } // Salto de página si no hay espacio
-                
-                doc.setLineWidth(0.5);
-                doc.line(14, y, 200, y);
-                y += 8;
-                
+                if(y > 250) { doc.addPage(); y = 20; }
                 doc.setFont("helvetica", "bold");
-                doc.setFontSize(11);
                 doc.text("RESUMEN DE PALLETS (PICKING):", 14, y);
-                y += 8;
-                
+                y += 7;
                 doc.setFont("helvetica", "normal");
-                doc.setFontSize(10);
-                
-                palletsKeys.forEach(p => {
-                    if(y > 280) { doc.addPage(); y = 20; }
-                    const totales = resumenPallets[p];
+                keys.forEach(p => {
+                    let txt = `Pallet N° ${p} = `;
                     let partes = [];
-                    if (totales.CA > 0) partes.push(`${totales.CA} CA`);
-                    if (totales.UN > 0) partes.push(`${totales.UN} UN`);
-                    
-                    doc.text(`Pallet N° ${p} = ${partes.join(" / ")}`, 14, y);
+                    if(resumenPallets[p].CA > 0) partes.push(`${resumenPallets[p].CA} CA`);
+                    if(resumenPallets[p].UN > 0) partes.push(`${resumenPallets[p].UN} UN`);
+                    doc.text(txt + partes.join(" / "), 14, y);
                     y += 6;
                 });
             }
-            // ------------------------------------------------
 
-            doc.save(`Reporte_Carga_${currentCarga}.pdf`);
+            return doc; // Devolvemos el objeto para poder usarlo en el guardado a Drive
         }
     </script>
 </body>
