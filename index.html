@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CONTROL DE CARGAS - M2 v4.1</title>
+    <title>CONTROL DE CARGAS - M2 v4.2</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/html5-qrcode"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -19,7 +19,7 @@
     <header class="bg-blue-900 text-white p-4 sticky top-0 z-50 shadow-md">
         <div class="max-w-md mx-auto flex justify-between items-center">
             <div>
-                <h1 class="font-black text-xl leading-tight">CONTROL DE CARGAS v4.1</h1>
+                <h1 class="font-black text-xl leading-tight">CONTROL DE CARGAS v4.2</h1>
                 <p class="text-[10px] text-blue-300 font-bold uppercase tracking-wider">M2 Consultoría Digital</p>
             </div>
             <div id="contadores" class="text-[10px] bg-blue-800 px-3 py-1 rounded-lg font-mono text-right">
@@ -61,7 +61,7 @@
                     <span id="palletDisplay" class="bg-orange-100 text-orange-700 px-3 py-1 rounded-full text-xs font-black">PALLET N° 1</span>
                 </div>
                 <div class="flex gap-2">
-                    <input type="text" id="barcode" placeholder="SKU" class="flex-1 p-4 bg-yellow-50 rounded-2xl font-bold focus:outline-none">
+                    <input type="text" id="barcode" placeholder="SKU o Etiqueta Pallet" class="flex-1 p-4 bg-yellow-50 rounded-2xl font-bold focus:outline-none">
                     <button onclick="buscarArticulo()" class="bg-blue-600 text-white px-4 rounded-2xl font-bold text-sm">OK</button>
                     <button onclick="toggleCamara()" class="bg-slate-800 text-white px-4 rounded-2xl text-xl">📷</button>
                 </div>
@@ -117,6 +117,7 @@
         let nroPalletActual = 1;
         let html5QrCode = null;
 
+        // --- SISTEMA DE VOZ ---
         const recognition = (window.SpeechRecognition || window.webkitSpeechRecognition) ? new (window.SpeechRecognition || window.webkitSpeechRecognition)() : null;
         if(recognition) {
             recognition.lang = 'es-AR';
@@ -163,6 +164,7 @@
             window.speechSynthesis.speak(u); 
         }
 
+        // --- CÁMARA ---
         function toggleCamara() {
             const readerDiv = document.getElementById('reader');
             if (readerDiv.classList.contains('hidden')) {
@@ -188,6 +190,7 @@
             }
         }
 
+        // --- LÓGICA DE NEGOCIO ---
         function verificarOperador() {
             const val = document.getElementById('operadorSelect').value;
             if(val === "Otro") document.getElementById('operadorOtro').classList.remove('step-hidden');
@@ -219,44 +222,67 @@
         }
 
         async function buscarArticulo() {
-            const sku = document.getElementById('barcode').value;
-            if(!sku) return;
+            const rawValue = document.getElementById('barcode').value.trim();
+            if(!rawValue) return;
+
+            let params = { action: 'buscarArticulo', nroCarga: currentCarga, barcode: rawValue };
+
+            // DETECCIÓN DE ETIQUETA DE PALLET (30-36 caracteres)
+            if (rawValue.length >= 30) {
+                try {
+                    const itm = parseInt(rawValue.substring(1, 9), 10).toString();
+                    const cant = parseInt(rawValue.substring(26, 30), 10);
+                    params = { 
+                        action: 'buscarPorPalletCompleto', 
+                        nroCarga: currentCarga, 
+                        itm: itm, 
+                        cantidadEtiqueta: cant 
+                    };
+                } catch(e) { console.error("Error parseando etiqueta larga"); }
+            }
+
             const res = await fetch(GOOGLE_URL, {
                 method: 'POST',
-                body: JSON.stringify({ action: 'buscarArticulo', nroCarga: currentCarga, barcode: sku })
+                body: JSON.stringify(params)
             });
             const data = await res.json();
+
             if(data.success) {
-                if(data.opciones.length === 1) { prepararRegistro(data.opciones[0]); }
-                else {
+                if(data.opciones.length === 1) { 
+                    prepararRegistro(data.opciones[0], data.cantidadEtiqueta || null); 
+                } else {
                     const cont = document.getElementById('contenedorUM');
                     cont.innerHTML = '';
                     data.opciones.forEach(op => {
                         const b = document.createElement('button');
                         b.className = "w-full p-4 bg-white border border-blue-200 rounded-2xl font-black text-xl text-center";
                         b.innerText = op.um;
-                        b.onclick = () => prepararRegistro(op);
+                        b.onclick = () => prepararRegistro(op, data.cantidadEtiqueta || null);
                         cont.appendChild(b);
                     });
                     document.getElementById('secUM').classList.remove('step-hidden');
                 }
             } else { 
                 playBeep('err'); 
-                decir("Artículo no encontrado");
+                decir(data.msg || "No encontrado");
                 alert(data.msg); 
             }
         }
 
-        function prepararRegistro(item) {
+        function prepararRegistro(item, cantSugerida = null) {
             selectedItem = item;
             document.getElementById('txtArt').innerText = item.sku;
             document.getElementById('txtDesc').innerText = `${item.desc} (${item.um})`;
             document.getElementById('secUM').classList.add('step-hidden');
             document.getElementById('secCantidad').classList.remove('step-hidden');
-            document.getElementById('cantInput').focus();
             
-            // CAMBIO 1: Voz simplificada SKU + UM
-            decir("Artículo " + item.sku + ", " + item.um);
+            if(cantSugerida) {
+                document.getElementById('cantInput').value = cantSugerida;
+                decir("Pallet detectado. Cantidad " + cantSugerida);
+            } else {
+                decir("Artículo " + item.sku + ", " + item.um);
+            }
+            document.getElementById('cantInput').focus();
         }
 
         async function guardar() {
@@ -264,7 +290,6 @@
             if(!cant) return;
             const finalEscaneado = (selectedItem.actual || 0) + cant;
             
-            // CAMBIO 2: Cartel con "Cantidad en carga"
             if (finalEscaneado > selectedItem.total) {
                 playBeep('err'); 
                 decir("Error. Supera la carga.");
@@ -457,7 +482,6 @@
                 doc.text(String(item.scan), 130, y);
                 doc.text(hayDiferencia ? "DIF" : "OK", 155, y);
                 
-                // CAMBIO 3: Mostrar solo el pallet original si existe una lista
                 let p = String(item.pallet || "-");
                 if(p.includes(",")) p = p.split(",")[0].trim();
                 doc.text(p, 178, y);
