@@ -9,8 +9,8 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <style>
         .step-hidden { display: none !important; }
-        .bg-ok { background-color: #dcfce7 !important; } /* Verde claro */
-        .bg-diff { background-color: #fee2e2 !important; } /* Rojo claro */
+        .bg-ok { background-color: #dcfce7 !important; } 
+        .bg-diff { background-color: #fee2e2 !important; } 
     </style>
 </head>
 <body class="bg-slate-100 min-h-screen pb-32">
@@ -93,10 +93,10 @@
 
     <script>
         const GOOGLE_URL = "https://script.google.com/macros/s/AKfycbzKjFlPsGUOP1QgLr2FkFvodke-czEuXRmhoLyYmj7a2bgp4ZGEiHNSek6EUhIteEk/exec"; 
+        
         let currentCarga = "", nombreOp = "", selectedItem = null, maleVoice = null, nroPallet = 1;
         let totalCA = 0, scanCA = 0, totalUN = 0, scanUN = 0;
 
-        // Sonidos y Voz
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         function playBeep(type) {
             const osc = audioCtx.createOscillator();
@@ -115,7 +115,6 @@
             if(maleVoice) u.voice = maleVoice; window.speechSynthesis.speak(u); 
         }
 
-        // Lógica de Voz para Cantidad (Punto 1)
         function activarVoz() {
             const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
             recognition.lang = 'es-AR';
@@ -153,7 +152,7 @@
             if(confirm(`¿Cerrar Pallet N° ${nroPallet} y pasar al siguiente?`)) {
                 nroPallet++;
                 document.getElementById('palletNum').innerText = nroPallet;
-                document.getElementById('historial').innerHTML = ''; // Limpia vista para comodidad
+                document.getElementById('historial').innerHTML = ''; 
                 decir("Pallet " + nroPallet);
             }
         }
@@ -162,7 +161,6 @@
             const val = document.getElementById('barcode').value.trim();
             if(!val) return;
 
-            // LÓGICA PALLET HOMOGÉNEO (Parseo de etiqueta 36 chars)
             if(val.startsWith('H') && val.length >= 30) {
                 const itm = val.substring(1, 9);
                 const cant = parseInt(val.substring(26, 30));
@@ -171,13 +169,12 @@
                 const data = await res.json();
                 
                 if(data.success) {
-                    decir(`${data.item.sku}. Pallet completo de ${cant} unidades`);
+                    decir(`${data.item.sku}. Pallet completo de ${cant} cajas`);
                     prepararRegistro(data.item, cant);
                 } else alert(data.msg);
                 return;
             }
 
-            // Búsqueda normal
             decir("SKU " + val);
             const res = await fetch(GOOGLE_URL, {method:'POST', body: JSON.stringify({action:'buscarArticulo', nroCarga: currentCarga, barcode: val})});
             const data = await res.json();
@@ -205,7 +202,7 @@
             document.getElementById('secCantidad').classList.remove('step-hidden');
             if(cantAuto) {
                 document.getElementById('cantInput').value = cantAuto;
-                guardar(); // Auto registra si es pallet homogéneo
+                guardar(); 
             } else {
                 document.getElementById('cantInput').value = '';
                 document.getElementById('cantInput').focus();
@@ -230,17 +227,34 @@
             })});
             
             decir(`Registrado ${cant} ${selectedItem.um}`);
-            addHistorial(selectedItem.sku, cant, selectedItem.um, nroPallet);
+            addHistorial(selectedItem.sku, cant, selectedItem.um, nroPallet, selectedItem.index);
             document.getElementById('secCantidad').classList.add('step-hidden');
             document.getElementById('barcode').value = '';
             actualizarContadores();
         }
 
-        function addHistorial(sku, c, um, pal) {
+        function addHistorial(sku, c, um, pal, idFila) {
+            const divId = "hist-" + Date.now();
             const d = document.createElement('div');
+            d.id = divId;
             d.className = "bg-white p-3 rounded-xl border border-slate-200 text-xs flex justify-between items-center shadow-sm mb-1";
-            d.innerHTML = `<div><b>${sku}</b> (${um}) - P${pal}</div><div class="font-black text-green-600">+${c}</div>`;
+            d.innerHTML = `
+                <div><b>${sku}</b> (${um}) - P${pal}</div>
+                <div class="flex items-center gap-3">
+                    <span class="font-black text-green-600">+${c}</span>
+                    <button onclick="anularRegistro(${idFila}, ${c}, '${divId}')" class="bg-red-50 text-red-600 p-2 rounded-lg font-bold text-[10px]">❌</button>
+                </div>`;
             document.getElementById('historial').prepend(d);
+        }
+
+        async function anularRegistro(indexFila, cantidad, htmlId) {
+            if(!confirm("¿Anular este registro?")) return;
+            await fetch(GOOGLE_URL, {method:'POST', body: JSON.stringify({
+                action:'anularRegistro', nroCarga: currentCarga, indexFila: indexFila, cantidad: cantidad
+            })});
+            document.getElementById(htmlId).remove();
+            decir("Registro anulado");
+            actualizarContadores();
         }
 
         async function actualizarContadores() {
@@ -254,7 +268,6 @@
                 });
                 document.getElementById('contadores').innerHTML = `${scanCA}/${totalCA} CA | ${scanUN}/${totalUN} UN`;
                 
-                // PUNTO 10: Cartel carga completa
                 if(scanCA >= totalCA && scanUN >= totalUN && totalCA > 0) {
                     alert("¡CARGA COMPLETA!"); decir("Carga completa");
                 }
@@ -288,7 +301,6 @@
             const res = await fetch(GOOGLE_URL, {method:'POST', body: JSON.stringify({action:'finalizarCarga', nroCarga: currentCarga})});
             const data = await res.json();
             
-            // CABECERA
             doc.setFont("helvetica", "bold"); doc.setFontSize(18);
             doc.text("REPORTE DE CONTROL DE CARGA", 10, 20);
             
@@ -296,16 +308,13 @@
             doc.text(`Carga Nro: ${currentCarga}`, 10, 30);
             doc.setFontSize(10);
             doc.text(`Verificador: ${nombreOp}`, 10, 36);
-            // PUNTO 6: Totales en cabecera
             doc.text(`TOTAL CONTROLADO: ${scanCA}/${totalCA} CAJAS  -  ${scanUN}/${totalUN} UNIDADES`, 10, 42);
             
-            // PUNTO 3: Fecha formato 24hs
             const ahora = new Date();
             const fH = ahora.getHours().toString().padStart(2, '0') + ":" + ahora.getMinutes().toString().padStart(2, '0');
             doc.setFont("helvetica", "normal"); doc.setFontSize(8);
             doc.text(`Fecha: ${ahora.toLocaleDateString()} ${fH} hs`, 150, 30);
 
-            // TABLA
             let y = 52;
             doc.setFont("helvetica", "bold"); doc.setFontSize(8);
             doc.text("SKU", 10, y); doc.text("DESCRIPCION", 35, y); doc.text("UM", 95, y);
@@ -313,22 +322,22 @@
             doc.line(10, y+2, 200, y+2); y += 8;
 
             data.reporte.slice(1).forEach((f, idx) => {
-                const total = parseInt(f[6])||0, cont = parseInt(f[7])||0, dif = total !== cont;
+                // Índices actualizados para la nueva estructura
+                // f[1] = SKU, f[2] = Desc, f[4] = UM, f[5] = Canti (Total), f[6] = Escaneado, f[7] = Pallet
+                const total = parseInt(f[5])||0, cont = parseInt(f[6])||0, dif = total !== cont;
                 if(dif) doc.setFont("helvetica", "bold"); else doc.setFont("helvetica", "normal");
                 
-                doc.text(f[2].toString(), 10, y);
-                doc.text(f[3].toString().substring(0, 30), 35, y);
-                doc.text(f[5].toString(), 95, y);
+                doc.text(f[1].toString(), 10, y);
+                doc.text(f[2].toString().substring(0, 30), 35, y);
+                doc.text(f[4].toString(), 95, y);
                 doc.text(total.toString(), 115, y);
                 doc.text(cont.toString(), 130, y);
-                doc.text(f[8] ? f[8].toString().substring(0,20) : "-", 145, y);
+                doc.text(f[7] ? f[7].toString().substring(0,20) : "-", 145, y);
                 
-                // PUNTO 4: Check con tilde v
                 doc.text(dif ? "DIF" : "v OK", 185, y);
                 
                 y += 6;
                 if (y > 275) { 
-                    // PUNTO 5: Pie de página
                     doc.text(`Página ${doc.internal.getNumberOfPages()}`, 100, 288);
                     doc.addPage(); y = 20; 
                 }
