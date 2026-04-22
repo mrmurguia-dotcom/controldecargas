@@ -9,71 +9,68 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <style>
         .step-hidden { display: none !important; }
-        #modalResumen { backdrop-filter: blur(4px); }
+        .bg-ok { background-color: #dcfce7 !important; } /* Verde claro */
+        .bg-diff { background-color: #fee2e2 !important; } /* Rojo claro */
     </style>
 </head>
-<body class="bg-slate-100 min-h-screen pb-24">
+<body class="bg-slate-100 min-h-screen pb-32">
 
     <header class="bg-blue-900 text-white p-4 sticky top-0 z-50 shadow-md">
         <div class="max-w-md mx-auto flex justify-between items-center">
             <div>
                 <h1 class="font-black text-xl leading-tight">CONTROL DE CARGAS</h1>
-                <p class="text-[10px] text-blue-300 font-bold uppercase tracking-wider">Creado por M2 Consultoría Digital</p>
+                <p class="text-[9px] text-blue-300 font-bold uppercase">M2 Consultoría Digital</p>
             </div>
-            <div id="contadores" class="text-[10px] bg-blue-800 px-3 py-1 rounded-lg font-mono text-right">
-                INICIAR...
-            </div>
+            <div id="contadores" class="text-[10px] bg-blue-800 px-3 py-1 rounded-lg font-mono text-right">0/0</div>
         </div>
     </header>
 
     <main class="max-w-md mx-auto p-4 space-y-4">
         
-        <section id="stepCarga" class="bg-white p-6 rounded-3xl shadow-sm border border-slate-200">
+        <section id="stepCarga" class="bg-white p-6 rounded-3xl shadow-sm border">
             <div class="space-y-4">
-                <div>
-                    <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Verificador</label>
-                    <select id="operadorSelect" onchange="verificarOperador()" class="w-full p-4 bg-slate-50 rounded-2xl font-bold focus:outline-none">
-                        <option value="">Seleccione Verificador...</option>
-                        <option value="Omar Dubi">Omar Dubi</option>
-                        <option value="Jose Servin">Jose Servin</option>
-                        <option value="Maxi Murray">Maxi Murray</option>
-                        <option value="Otro">Otro...</option>
-                    </select>
-                    <input type="text" id="operadorOtro" placeholder="Nombre del verificador..." class="step-hidden w-full mt-2 p-4 bg-slate-50 rounded-2xl font-bold focus:outline-none border border-slate-200">
-                </div>
-
-                <div>
-                    <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Nro Carga</label>
-                    <div class="flex gap-2">
-                        <input type="number" id="nroCarga" placeholder="Ej: 8612" class="flex-1 p-4 bg-slate-50 rounded-2xl text-xl font-bold focus:outline-none">
-                        <button onclick="iniciar()" id="btnIniciar" class="bg-blue-600 text-white px-6 rounded-2xl font-bold">OK</button>
-                    </div>
-                </div>
+                <select id="operadorSelect" onchange="verificarOperador()" class="w-full p-4 bg-slate-50 rounded-2xl font-bold">
+                    <option value="">Seleccione Verificador...</option>
+                    <option value="Omar Dubi">Omar Dubi</option>
+                    <option value="Jose Servin">Jose Servin</option>
+                    <option value="Maxi Murray">Maxi Murray</option>
+                    <option value="Otro">Otro...</option>
+                </select>
+                <input type="text" id="operadorOtro" placeholder="Nombre..." class="step-hidden w-full p-4 bg-slate-50 rounded-2xl border">
+                <input type="number" id="nroCarga" placeholder="Nro Carga" class="w-full p-4 bg-slate-50 rounded-2xl text-xl font-bold">
+                <button onclick="iniciar()" id="btnIniciar" class="w-full bg-blue-600 text-white p-4 rounded-2xl font-black">INGRESAR</button>
             </div>
         </section>
 
         <section id="stepOperacion" class="step-hidden space-y-4">
-            <div class="bg-white p-4 rounded-3xl shadow-sm border border-slate-200">
-                <label class="block text-xs font-bold text-slate-400 uppercase mb-2">Identificar Producto</label>
+            <div class="flex items-center justify-between bg-white p-4 rounded-2xl shadow-sm border border-orange-200">
+                <div class="text-orange-800 font-black text-lg">PALLET N° <span id="palletNum">1</span></div>
+                <button onclick="cerrarPallet()" class="bg-orange-500 text-white px-4 py-2 rounded-xl font-bold text-xs shadow-md">CERRAR PALLET</button>
+            </div>
+
+            <div class="bg-white p-4 rounded-3xl shadow-sm border">
                 <div class="flex gap-2">
-                    <input type="text" id="barcode" placeholder="SKU" class="flex-1 p-4 bg-yellow-50 rounded-2xl font-bold focus:outline-none">
-                    <button onclick="buscarArticulo()" class="bg-blue-600 text-white px-4 rounded-2xl font-bold text-sm">OK</button>
+                    <input type="text" id="barcode" placeholder="Escanear SKU o Etiqueta Pallet" class="flex-1 p-4 bg-yellow-50 rounded-2xl font-bold text-sm">
+                    <button onclick="buscarArticulo()" class="bg-blue-600 text-white px-4 rounded-2xl font-bold">OK</button>
                     <button onclick="toggleCamara()" class="bg-slate-800 text-white px-4 rounded-2xl text-xl">📷</button>
                 </div>
                 <div id="reader" class="mt-4 rounded-2xl overflow-hidden hidden"></div>
             </div>
 
             <div id="secUM" class="step-hidden bg-blue-50 p-4 rounded-3xl border-2 border-blue-200">
-                <p class="text-xs font-black text-blue-800 mb-3 uppercase">Seleccione Presentación:</p>
                 <div id="contenedorUM" class="grid grid-cols-1 gap-2"></div>
             </div>
 
             <div id="secCantidad" class="step-hidden bg-white p-6 rounded-3xl shadow-xl border-t-4 border-blue-900">
                 <h2 id="txtArt" class="text-2xl font-black text-slate-900"></h2>
-                <p id="txtDesc" class="text-sm text-slate-500 mb-4"></p>
-                <div class="flex gap-3">
-                    <input type="number" id="cantInput" placeholder="Cant" class="w-1/2 p-4 text-3xl font-black bg-slate-100 rounded-2xl text-center focus:outline-none">
-                    <button onclick="guardar()" class="flex-1 bg-green-600 text-white rounded-2xl font-black text-lg">REGISTRAR</button>
+                <p id="txtDesc" class="text-xs text-slate-500 mb-4"></p>
+                
+                <div class="space-y-4">
+                    <div class="flex gap-2 items-center">
+                        <input type="number" id="cantInput" placeholder="0" class="flex-1 p-4 text-4xl font-black bg-slate-100 rounded-2xl text-center">
+                        <button onclick="activarVoz()" class="bg-red-100 text-red-600 p-4 rounded-2xl text-2xl">🎤</button>
+                    </div>
+                    <button onclick="guardar()" class="w-full bg-green-600 text-white py-5 rounded-2xl font-black text-xl shadow-lg">REGISTRAR</button>
                 </div>
             </div>
 
@@ -81,185 +78,186 @@
         </section>
     </main>
 
-    <footer id="footerApp" class="step-hidden fixed bottom-0 left-0 right-0 p-4 bg-white/90 border-t flex gap-3 max-w-md mx-auto z-40">
-        <button onclick="abrirResumen()" class="flex-1 py-4 bg-slate-200 text-slate-700 rounded-2xl font-bold text-xs">VER RESUMEN</button>
-        <button onclick="confirmarFinalizar()" class="flex-1 py-4 bg-red-600 text-white rounded-2xl font-bold text-xs">FINALIZAR CARGA</button>
+    <footer id="footerApp" class="step-hidden fixed bottom-0 left-0 right-0 p-4 bg-white/95 border-t flex gap-2 max-w-md mx-auto z-40">
+        <button onclick="abrirResumen()" class="flex-1 py-4 bg-slate-200 text-slate-700 rounded-2xl font-bold text-[10px]">VER RESUMEN</button>
+        <button onclick="confirmarFinalizar()" class="flex-1 py-4 bg-red-600 text-white rounded-2xl font-bold text-[10px]">FINALIZAR</button>
     </footer>
 
     <div id="modalResumen" class="step-hidden fixed inset-0 bg-black/60 z-[100] p-4 flex items-center justify-center">
-        <div class="bg-white w-full max-w-xs rounded-3xl max-h-[80vh] flex flex-col p-6 shadow-2xl">
-            <h3 class="font-black text-xl mb-4 text-blue-900">Resumen Carga</h3>
-            <div id="listaResumen" class="flex-1 overflow-y-auto space-y-3 text-sm border-y py-4"></div>
-            <button onclick="cerrarResumen()" class="mt-4 w-full py-3 bg-blue-900 text-white rounded-xl font-bold">CERRAR</button>
+        <div class="bg-white w-full max-w-xs rounded-3xl max-h-[85vh] flex flex-col p-6 shadow-2xl">
+            <h3 class="font-black text-xl mb-4 text-blue-900 border-b pb-2">Resumen de Control</h3>
+            <div id="listaResumen" class="flex-1 overflow-y-auto space-y-2 text-sm pr-1"></div>
+            <button onclick="cerrarResumen()" class="mt-4 w-full py-3 bg-blue-900 text-white rounded-xl font-bold">VOLVER</button>
         </div>
     </div>
 
     <script>
         const GOOGLE_URL = "https://script.google.com/macros/s/AKfycbzKjFlPsGUOP1QgLr2FkFvodke-czEuXRmhoLyYmj7a2bgp4ZGEiHNSek6EUhIteEk/exec"; 
-        
-        let currentCarga = "";
-        let nombreOp = "";
-        let selectedItem = null;
-        let maleVoice = null;
+        let currentCarga = "", nombreOp = "", selectedItem = null, maleVoice = null, nroPallet = 1;
+        let totalCA = 0, scanCA = 0, totalUN = 0, scanUN = 0;
 
+        // Sonidos y Voz
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         function playBeep(type) {
-            if(audioCtx.state === 'suspended') audioCtx.resume();
             const osc = audioCtx.createOscillator();
-            const gain = audioCtx.createGain();
-            osc.connect(gain); gain.connect(audioCtx.destination);
-            if(type === 'ok') {
-                osc.type = 'sine'; osc.frequency.setValueAtTime(800, audioCtx.currentTime);
-                gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
-                osc.start(); osc.stop(audioCtx.currentTime + 0.15);
-            } else {
-                osc.type = 'sawtooth'; osc.frequency.setValueAtTime(150, audioCtx.currentTime);
-                gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
-                osc.start(); osc.stop(audioCtx.currentTime + 0.6);
-            }
+            const g = audioCtx.createGain();
+            osc.connect(g); g.connect(audioCtx.destination);
+            osc.frequency.setValueAtTime(type==='ok'?800:150, audioCtx.currentTime);
+            g.gain.setValueAtTime(0.1, audioCtx.currentTime);
+            osc.start(); osc.stop(audioCtx.currentTime + (type==='ok'?0.1:0.5));
         }
 
         window.speechSynthesis.onvoiceschanged = () => {
-            const voces = window.speechSynthesis.getVoices();
-            maleVoice = voces.find(v => v.lang.includes('es') && /pablo|diego|jorge|male|hombre/i.test(v.name));
+            maleVoice = window.speechSynthesis.getVoices().find(v => v.lang.includes('es') && /pablo|diego|jorge|male|hombre/i.test(v.name));
         };
-
         function decir(t) { 
-            const u = new SpeechSynthesisUtterance(t); 
-            u.lang = 'es-AR'; 
-            if(maleVoice) u.voice = maleVoice;
-            window.speechSynthesis.speak(u); 
+            const u = new SpeechSynthesisUtterance(t); u.lang='es-AR'; 
+            if(maleVoice) u.voice = maleVoice; window.speechSynthesis.speak(u); 
+        }
+
+        // Lógica de Voz para Cantidad (Punto 1)
+        function activarVoz() {
+            const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+            recognition.lang = 'es-AR';
+            recognition.start();
+            decir("Diga la cantidad");
+            recognition.onresult = (e) => {
+                const vocal = e.results[0][0].transcript.replace(/[^0-9]/g, '');
+                if(vocal) {
+                    document.getElementById('cantInput').value = vocal;
+                    decir(vocal);
+                }
+            };
         }
 
         function verificarOperador() {
             const val = document.getElementById('operadorSelect').value;
-            if(val === "Otro") document.getElementById('operadorOtro').classList.remove('step-hidden');
-            else document.getElementById('operadorOtro').classList.add('step-hidden');
+            document.getElementById('operadorOtro').classList.toggle('step-hidden', val !== "Otro");
         }
 
         async function iniciar() {
-            const sel = document.getElementById('operadorSelect').value;
-            nombreOp = sel === "Otro" ? document.getElementById('operadorOtro').value : sel;
+            nombreOp = document.getElementById('operadorSelect').value === "Otro" ? document.getElementById('operadorOtro').value : document.getElementById('operadorSelect').value;
             currentCarga = document.getElementById('nroCarga').value;
-            if(!nombreOp || !currentCarga) return alert("Complete los datos.");
-            
-            const btn = document.getElementById('btnIniciar');
-            btn.innerText = "⏳";
-            try {
-                const res = await fetch(GOOGLE_URL, {method:'POST', body: JSON.stringify({action:'validarCarga', nroCarga: currentCarga})});
-                const data = await res.json();
-                if(data.success) {
-                    document.getElementById('stepCarga').classList.add('step-hidden');
-                    document.getElementById('stepOperacion').classList.remove('step-hidden');
-                    document.getElementById('footerApp').classList.remove('step-hidden');
-                    actualizarContadores();
-                } else { alert(data.msg); }
-            } catch(e) { alert("Error de conexión"); }
-            btn.innerText = "OK";
+            if(!nombreOp || !currentCarga) return alert("Faltan datos");
+            const res = await fetch(GOOGLE_URL, {method:'POST', body: JSON.stringify({action:'validarCarga', nroCarga: currentCarga})});
+            const data = await res.json();
+            if(data.success) {
+                document.getElementById('stepCarga').classList.add('step-hidden');
+                document.getElementById('stepOperacion').classList.remove('step-hidden');
+                document.getElementById('footerApp').classList.remove('step-hidden');
+                actualizarContadores();
+            } else alert(data.msg);
+        }
+
+        function cerrarPallet() {
+            if(confirm(`¿Cerrar Pallet N° ${nroPallet} y pasar al siguiente?`)) {
+                nroPallet++;
+                document.getElementById('palletNum').innerText = nroPallet;
+                document.getElementById('historial').innerHTML = ''; // Limpia vista para comodidad
+                decir("Pallet " + nroPallet);
+            }
         }
 
         async function buscarArticulo() {
-            const sku = document.getElementById('barcode').value;
-            if(!sku) return;
-            decir("SKU " + sku);
-            
-            const res = await fetch(GOOGLE_URL, {method:'POST', body: JSON.stringify({action:'buscarArticulo', nroCarga: currentCarga, barcode: sku})});
+            const val = document.getElementById('barcode').value.trim();
+            if(!val) return;
+
+            // LÓGICA PALLET HOMOGÉNEO (Parseo de etiqueta 36 chars)
+            if(val.startsWith('H') && val.length >= 30) {
+                const itm = val.substring(1, 9);
+                const cant = parseInt(val.substring(26, 30));
+                
+                const res = await fetch(GOOGLE_URL, {method:'POST', body: JSON.stringify({action:'buscarPalletHomogeneo', nroCarga: currentCarga, itm: itm})});
+                const data = await res.json();
+                
+                if(data.success) {
+                    decir(`${data.item.sku}. Pallet completo de ${cant} unidades`);
+                    prepararRegistro(data.item, cant);
+                } else alert(data.msg);
+                return;
+            }
+
+            // Búsqueda normal
+            decir("SKU " + val);
+            const res = await fetch(GOOGLE_URL, {method:'POST', body: JSON.stringify({action:'buscarArticulo', nroCarga: currentCarga, barcode: val})});
             const data = await res.json();
-            
             if(data.success) {
-                if(data.opciones.length === 1) {
-                    // PUNTO 1: Autoselección si hay solo una UM
-                    decir(data.opciones[0].um);
-                    prepararRegistro(data.opciones[0]);
-                } else {
-                    const cont = document.getElementById('contenedorUM');
-                    cont.innerHTML = '';
+                if(data.opciones.length === 1) { decir(data.opciones[0].um); prepararRegistro(data.opciones[0]); }
+                else {
+                    const cont = document.getElementById('contenedorUM'); cont.innerHTML = '';
                     data.opciones.forEach(op => {
                         const b = document.createElement('button');
-                        b.className = "w-full p-4 bg-white border border-blue-200 rounded-2xl font-black text-xl text-center";
-                        b.innerHTML = `${op.um}`;
+                        b.className = "w-full p-4 bg-white border border-blue-200 rounded-2xl font-black text-xl";
+                        b.innerText = op.um;
                         b.onclick = () => { decir(op.um); prepararRegistro(op); };
                         cont.appendChild(b);
                     });
                     document.getElementById('secUM').classList.remove('step-hidden');
                 }
-            } else { alert(data.msg); }
+            } else alert(data.msg);
         }
 
-        function prepararRegistro(item) {
+        function prepararRegistro(item, cantAuto = null) {
             selectedItem = item;
             document.getElementById('txtArt').innerText = item.sku;
             document.getElementById('txtDesc').innerText = `${item.desc} (${item.um})`;
             document.getElementById('secUM').classList.add('step-hidden');
             document.getElementById('secCantidad').classList.remove('step-hidden');
-            document.getElementById('cantInput').focus();
+            if(cantAuto) {
+                document.getElementById('cantInput').value = cantAuto;
+                guardar(); // Auto registra si es pallet homogéneo
+            } else {
+                document.getElementById('cantInput').value = '';
+                document.getElementById('cantInput').focus();
+            }
         }
 
         async function guardar() {
             const cant = parseInt(document.getElementById('cantInput').value);
             if(!cant) return;
 
-            const finalEsperado = selectedItem.total;
             const finalEscaneado = selectedItem.actual + cant;
-
-            // PUNTO 2: Lógica de sonidos y avisos sin bloqueos
-            if (finalEscaneado !== finalEsperado) {
-                playBeep('err');
-                decir(`Diferencia. La carga pide ${finalEsperado}.`);
-                if(!confirm(`Atención: La carga pide ${finalEsperado}.\nUsted registra ${finalEscaneado}.\n\n¿Desea continuar?`)) return;
+            if (finalEscaneado === selectedItem.total) {
+                playBeep('ok'); decir("Cantidad OK");
             } else {
-                playBeep('ok');
-                decir("Cantidad OK"); // Punto 2: Solo voz y sonido si está OK
+                playBeep('err'); decir(`Diferencia. Pide ${selectedItem.total}`);
+                if(!confirm(`DIFERENCIA: Pide ${selectedItem.total}, llevas ${finalEscaneado}. ¿Registrar?`)) return;
             }
 
-            const res = await fetch(GOOGLE_URL, {method:'POST', body: JSON.stringify({
-                action:'registrarCantidad', nroCarga: currentCarga, indexFila: selectedItem.index, cantidad: cant
+            await fetch(GOOGLE_URL, {method:'POST', body: JSON.stringify({
+                action:'registrarCantidad', nroCarga: currentCarga, 
+                indexFila: selectedItem.index, nuevaSuma: finalEscaneado, nroPallet: nroPallet
             })});
             
             decir(`Registrado ${cant} ${selectedItem.um}`);
-            selectedItem.actual = finalEscaneado;
-            addHistorial(selectedItem.sku, cant, selectedItem.um, selectedItem.index);
+            addHistorial(selectedItem.sku, cant, selectedItem.um, nroPallet);
             document.getElementById('secCantidad').classList.add('step-hidden');
             document.getElementById('barcode').value = '';
             actualizarContadores();
         }
 
-        function addHistorial(sku, c, um, idFila) {
-            const list = document.getElementById('historial');
-            const divId = "hist-" + Date.now();
+        function addHistorial(sku, c, um, pal) {
             const d = document.createElement('div');
-            d.id = divId;
-            d.className = "bg-white p-3 rounded-xl border border-slate-200 text-sm flex justify-between items-center shadow-sm mb-2";
-            d.innerHTML = `
-                <div><span class="font-bold text-blue-900">${sku}</span> <span class="text-xs text-slate-500">(${um})</span></div>
-                <div class="flex items-center gap-3">
-                    <span class="font-black text-green-600">+${c}</span>
-                    <button onclick="anularRegistro(${idFila}, ${c}, '${divId}')" class="bg-red-50 text-red-600 p-2 rounded-lg font-bold text-[10px]">❌</button>
-                </div>
-            `;
-            list.prepend(d);
-        }
-
-        async function anularRegistro(indexFila, cantidad, htmlId) {
-            if(!confirm("¿Anular este registro?")) return;
-            await fetch(GOOGLE_URL, {method:'POST', body: JSON.stringify({
-                action:'anularRegistro', nroCarga: currentCarga, indexFila: indexFila, cantidad: cantidad
-            })});
-            document.getElementById(htmlId).remove();
-            decir("Registro anulado");
-            actualizarContadores();
+            d.className = "bg-white p-3 rounded-xl border border-slate-200 text-xs flex justify-between items-center shadow-sm mb-1";
+            d.innerHTML = `<div><b>${sku}</b> (${um}) - P${pal}</div><div class="font-black text-green-600">+${c}</div>`;
+            document.getElementById('historial').prepend(d);
         }
 
         async function actualizarContadores() {
             const res = await fetch(GOOGLE_URL, {method:'POST', body: JSON.stringify({action:'obtenerResumen', nroCarga: currentCarga})});
             const data = await res.json();
             if(data.success) {
-                let cT=0, cS=0, uT=0, uS=0;
+                totalCA=0; scanCA=0; totalUN=0; scanUN=0;
                 data.resumen.forEach(i => {
-                    if(i.um === "CAJA") { cT += i.total; cS += i.scan; }
-                    else { uT += i.total; uS += i.scan; }
+                    if(i.um.includes("CAJA")) { totalCA += i.total; scanCA += i.scan; }
+                    else { totalUN += i.total; scanUN += i.scan; }
                 });
-                document.getElementById('contadores').innerHTML = `${cS}/${cT} CA<br>${uS}/${uT} UN`;
+                document.getElementById('contadores').innerHTML = `${scanCA}/${totalCA} CA | ${scanUN}/${totalUN} UN`;
+                
+                // PUNTO 10: Cartel carga completa
+                if(scanCA >= totalCA && scanUN >= totalUN && totalCA > 0) {
+                    alert("¡CARGA COMPLETA!"); decir("Carga completa");
+                }
             }
         }
 
@@ -270,15 +268,19 @@
             const list = document.getElementById('listaResumen');
             list.innerHTML = '';
             data.resumen.forEach(i => {
+                const isOk = i.total === i.scan;
                 const d = document.createElement('div');
-                d.className = "p-2 bg-slate-50 rounded-lg border mb-2";
-                d.innerHTML = `<div class="font-bold">${i.sku}</div><div class="flex justify-between text-[10px]"><span>${i.um}</span><span>${i.scan}/${i.total}</span></div>`;
+                d.className = `p-3 rounded-xl border ${isOk ? 'bg-ok border-green-200' : 'bg-diff border-red-200'}`;
+                d.innerHTML = `<div class="font-bold text-slate-800">${i.sku}</div>
+                               <div class="flex justify-between text-[10px] text-slate-600">
+                                 <span>${i.um}</span><span>${i.scan} / ${i.total} ${isOk?'✅':'⚠️'}</span>
+                               </div>`;
                 list.appendChild(d);
             });
         }
 
         function cerrarResumen() { document.getElementById('modalResumen').classList.add('step-hidden'); }
-        function confirmarFinalizar() { if(confirm("¿Finalizar y eliminar carga de la planilla?")) generarPDF(); }
+        function confirmarFinalizar() { if(confirm("¿Finalizar y generar PDF?")) generarPDF(); }
 
         async function generarPDF() {
             const { jsPDF } = window.jspdf;
@@ -286,66 +288,65 @@
             const res = await fetch(GOOGLE_URL, {method:'POST', body: JSON.stringify({action:'finalizarCarga', nroCarga: currentCarga})});
             const data = await res.json();
             
-            // CABECERA (Punto 4)
-            doc.setFont("helvetica", "bold");
-            doc.setFontSize(18);
+            // CABECERA
+            doc.setFont("helvetica", "bold"); doc.setFontSize(18);
             doc.text("REPORTE DE CONTROL DE CARGA", 10, 20);
             
             doc.setFontSize(12);
-            doc.text(`Verificador: ${nombreOp}`, 10, 30);
-            doc.text(`Carga Nro: ${currentCarga}`, 10, 38);
+            doc.text(`Carga Nro: ${currentCarga}`, 10, 30);
+            doc.setFontSize(10);
+            doc.text(`Verificador: ${nombreOp}`, 10, 36);
+            // PUNTO 6: Totales en cabecera
+            doc.text(`TOTAL CONTROLADO: ${scanCA}/${totalCA} CAJAS  -  ${scanUN}/${totalUN} UNIDADES`, 10, 42);
             
-            doc.setFontSize(9);
-            doc.setFont("helvetica", "normal");
-            doc.text(`Fecha Impresión: ${new Date().toLocaleString()}`, 10, 44);
+            // PUNTO 3: Fecha formato 24hs
+            const ahora = new Date();
+            const fH = ahora.getHours().toString().padStart(2, '0') + ":" + ahora.getMinutes().toString().padStart(2, '0');
+            doc.setFont("helvetica", "normal"); doc.setFontSize(8);
+            doc.text(`Fecha: ${ahora.toLocaleDateString()} ${fH} hs`, 150, 30);
 
-            let y = 55;
-            doc.setFont("helvetica", "bold");
-            doc.text("SKU", 10, y);
-            doc.text("DESCRIPCION", 35, y);
-            doc.text("UM", 115, y);
-            doc.text("TOTAL", 135, y);
-            doc.text("CONT", 155, y);
-            doc.text("CHECK", 175, y);
-            doc.line(10, y+2, 200, y+2);
-            
-            y += 8;
-            data.reporte.slice(1).forEach(f => {
-                const cant = parseInt(f[6]) || 0;
-                const cont = parseInt(f[7]) || 0;
-                const dif = cant !== cont;
+            // TABLA
+            let y = 52;
+            doc.setFont("helvetica", "bold"); doc.setFontSize(8);
+            doc.text("SKU", 10, y); doc.text("DESCRIPCION", 35, y); doc.text("UM", 95, y);
+            doc.text("TOTAL", 115, y); doc.text("CONT", 130, y); doc.text("PALLET", 145, y); doc.text("CHECK", 185, y);
+            doc.line(10, y+2, 200, y+2); y += 8;
 
-                // PUNTO 4: Resaltar en negrita si hay diferencia
-                if(dif) doc.setFont("helvetica", "bold");
-                else doc.setFont("helvetica", "normal");
-
+            data.reporte.slice(1).forEach((f, idx) => {
+                const total = parseInt(f[6])||0, cont = parseInt(f[7])||0, dif = total !== cont;
+                if(dif) doc.setFont("helvetica", "bold"); else doc.setFont("helvetica", "normal");
+                
                 doc.text(f[2].toString(), 10, y);
-                doc.text(f[3].toString().substring(0, 35), 35, y);
-                doc.text(f[5].toString(), 115, y);
-                doc.text(cant.toString(), 135, y);
-                doc.text(cont.toString(), 155, y);
-                doc.text(dif ? "DIF (  )" : "OK (  )", 175, y);
+                doc.text(f[3].toString().substring(0, 30), 35, y);
+                doc.text(f[5].toString(), 95, y);
+                doc.text(total.toString(), 115, y);
+                doc.text(cont.toString(), 130, y);
+                doc.text(f[8] ? f[8].toString().substring(0,20) : "-", 145, y);
+                
+                // PUNTO 4: Check con tilde v
+                doc.text(dif ? "DIF" : "v OK", 185, y);
                 
                 y += 6;
-                if (y > 280) { doc.addPage(); y = 20; }
+                if (y > 275) { 
+                    // PUNTO 5: Pie de página
+                    doc.text(`Página ${doc.internal.getNumberOfPages()}`, 100, 288);
+                    doc.addPage(); y = 20; 
+                }
             });
+            doc.text(`Página ${doc.internal.getNumberOfPages()}`, 100, 288);
 
-            doc.save(`CARGA_${currentCarga}.pdf`);
-            setTimeout(() => { location.reload(); }, 1500);
+            doc.save(`CONTROL_CARGA_${currentCarga}.pdf`);
+            setTimeout(() => location.reload(), 1500);
         }
 
+        let scanner = null;
         function toggleCamara() {
             const r = document.getElementById('reader');
             if(r.classList.contains('hidden')) {
                 r.classList.remove('hidden');
-                let scanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 });
-                scanner.render(txt => {
-                    document.getElementById('barcode').value = txt;
-                    r.classList.add('hidden');
-                    scanner.clear();
-                    buscarArticulo();
-                });
-            } else { r.classList.add('hidden'); }
+                scanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 });
+                scanner.render(txt => { document.getElementById('barcode').value = txt; r.classList.add('hidden'); scanner.clear(); buscarArticulo(); });
+            } else r.classList.add('hidden');
         }
     </script>
 </body>
