@@ -348,10 +348,23 @@
             const data = await res.json();
             const list = document.getElementById('listaResumen');
             list.innerHTML = '';
+
             data.resumen.forEach(i => {
                 const d = document.createElement('div');
-                d.className = "p-2 bg-slate-50 rounded-lg border mb-2 text-xs";
-                d.innerHTML = `<b>${i.sku}</b><br>${i.um}: ${i.scan}/${i.total}`;
+                
+                // Determinamos si el SKU está completo o tiene diferencias
+                const esCorrecto = i.scan === i.total;
+                const bgColor = esCorrecto ? 'bg-green-100 border-green-300' : 'bg-red-100 border-red-300';
+                const textColor = esCorrecto ? 'text-green-800' : 'text-red-800';
+
+                d.className = `p-3 rounded-xl border mb-2 text-xs shadow-sm ${bgColor} ${textColor}`;
+                d.innerHTML = `
+                    <div class="flex justify-between items-center mb-1">
+                        <b class="text-sm">${i.sku}</b>
+                        <span class="font-black uppercase">${esCorrecto ? '✓ OK' : '⚠ Dif'}</span>
+                    </div>
+                    <div>${i.um}: <b>${i.scan}</b> de ${i.total}</div>
+                `;
                 list.appendChild(d);
             });
         }
