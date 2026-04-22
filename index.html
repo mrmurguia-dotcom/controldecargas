@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CONTROL DE CARGAS - M2</title>
+    <title>CONTROL DE CARGAS - M2 v4</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/html5-qrcode"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -19,7 +19,7 @@
     <header class="bg-blue-900 text-white p-4 sticky top-0 z-50 shadow-md">
         <div class="max-w-md mx-auto flex justify-between items-center">
             <div>
-                <h1 class="font-black text-xl leading-tight">CONTROL DE CARGAS v1</h1>
+                <h1 class="font-black text-xl leading-tight">CONTROL DE CARGAS v4</h1>
                 <p class="text-[10px] text-blue-300 font-bold uppercase tracking-wider">M2 Consultoría Digital</p>
             </div>
             <div id="contadores" class="text-[10px] bg-blue-800 px-3 py-1 rounded-lg font-mono text-right">
@@ -159,6 +159,7 @@
         function decir(t) { 
             const u = new SpeechSynthesisUtterance(t); 
             u.lang = 'es-AR'; 
+            u.rate = 0.9;
             window.speechSynthesis.speak(u); 
         }
 
@@ -239,7 +240,11 @@
                     });
                     document.getElementById('secUM').classList.remove('step-hidden');
                 }
-            } else { playBeep('err'); alert(data.msg); }
+            } else { 
+                playBeep('err'); 
+                decir("Artículo no encontrado");
+                alert(data.msg); 
+            }
         }
 
         function prepararRegistro(item) {
@@ -249,17 +254,26 @@
             document.getElementById('secUM').classList.add('step-hidden');
             document.getElementById('secCantidad').classList.remove('step-hidden');
             document.getElementById('cantInput').focus();
-            decir(item.um);
+            
+            // CANTO DE SKU Y DIFERENCIA
+            decir("Artículo " + item.sku);
+            if(item.actual < item.total) {
+                setTimeout(() => decir("Faltan " + (item.total - item.actual) + " de " + item.total), 1200);
+            }
         }
 
         async function guardar() {
             const cant = parseInt(document.getElementById('cantInput').value);
             if(!cant) return;
             const finalEscaneado = (selectedItem.actual || 0) + cant;
+            
             if (finalEscaneado > selectedItem.total) {
-                playBeep('err'); decir("Supera la cantidad");
-                return alert("Error: La cantidad supera lo solicitado.");
+                playBeep('err'); 
+                const falta = selectedItem.total - (selectedItem.actual || 0);
+                decir("Error. Solo podés cargar " + falta);
+                return alert("Error: La cantidad supera lo solicitado. Máximo permitido: " + falta);
             }
+            
             const res = await fetch(GOOGLE_URL, {
                 method: 'POST',
                 body: JSON.stringify({
@@ -273,7 +287,7 @@
             const data = await res.json();
             if(data.success) {
                 playBeep('ok');
-                addHistorial(selectedItem.sku, cant, selectedItem.um);
+                addHistorial(selectedItem.sku, cant, selectedItem.um, selectedItem.index, finalEscaneado);
                 document.getElementById('secCantidad').classList.add('step-hidden');
                 document.getElementById('barcode').value = '';
                 document.getElementById('barcode').focus();
@@ -281,12 +295,40 @@
             }
         }
 
-        function addHistorial(sku, c, um) {
+        function addHistorial(sku, c, um, index, totalNuevo) {
             const list = document.getElementById('historial');
             const d = document.createElement('div');
+            d.id = `hist-${Date.now()}`;
             d.className = "bg-white p-3 rounded-xl border border-slate-200 text-sm flex justify-between items-center shadow-sm mb-2";
-            d.innerHTML = `<div><b>${sku}</b> (${um}) - P${nroPalletActual}</div><div class="font-black text-green-600">+${c}</div>`;
+            d.innerHTML = `
+                <div><b>${sku}</b> (${um}) - P${nroPalletActual}</div>
+                <div class="flex items-center gap-3">
+                    <div class="font-black text-green-600">+${c}</div>
+                    <button onclick="borrarRegistro('${sku}', ${c}, ${index}, ${totalNuevo}, '${d.id}')" class="text-xs bg-red-100 text-red-600 px-2 py-1 rounded-lg">✕</button>
+                </div>`;
             list.prepend(d);
+        }
+
+        async function borrarRegistro(sku, cant, index, totalActualEnSheet, divId) {
+            if(!confirm(`¿Borrar el ingreso de ${cant} para ${sku}?`)) return;
+            const nuevaSuma = totalActualEnSheet - cant;
+            
+            const res = await fetch(GOOGLE_URL, {
+                method: 'POST',
+                body: JSON.stringify({
+                    action: 'registrarCantidad', 
+                    nroCarga: currentCarga, 
+                    indexFila: index, 
+                    nuevaSuma: nuevaSuma,
+                    nroPallet: nroPalletActual // Se mantiene el pallet actual
+                })
+            });
+            const data = await res.json();
+            if(data.success) {
+                document.getElementById(divId).remove();
+                actualizarContadores();
+                decir("Registro borrado");
+            }
         }
 
         async function actualizarContadores() {
@@ -308,7 +350,7 @@
         function cerrarPallet() {
             nroPalletActual++;
             document.getElementById('palletDisplay').innerText = `PALLET N° ${nroPalletActual}`;
-            decir("Pallet cerrado");
+            decir("Pallet " + nroPalletActual);
             playBeep('ok');
         }
 
@@ -335,20 +377,29 @@
         function cerrarResumen() { document.getElementById('modalResumen').classList.add('step-hidden'); }
 
         async function confirmarFinalizar() {
-            if(confirm("¿Finalizar carga y generar PDF?")) {
-                const res = await fetch(GOOGLE_URL, {
-                    method: 'POST',
-                    body: JSON.stringify({ action: 'obtenerResumen', nroCarga: currentCarga })
-                });
-                const data = await res.json();
-                generarPDF(data.resumen);
-                await fetch(GOOGLE_URL, {
-                    method: 'POST',
-                    body: JSON.stringify({ action: 'finalizarCarga', nroCarga: currentCarga })
-                });
-                alert("Carga Finalizada");
-                location.reload();
+            const res = await fetch(GOOGLE_URL, {
+                method: 'POST',
+                body: JSON.stringify({ action: 'obtenerResumen', nroCarga: currentCarga })
+            });
+            const data = await res.json();
+            
+            // CONTAR DIFERENCIAS
+            const diferencias = data.resumen.filter(i => i.scan !== i.total).length;
+            
+            if(diferencias > 0) {
+                decir("Atención. Tenés " + diferencias + " diferencias.");
+                if(!confirm(`¡CUIDADO! Hay ${diferencias} artículos con diferencias.\n\n¿Estás seguro de finalizar e imprimir reporte?`)) return;
+            } else {
+                if(!confirm("¿Finalizar carga y generar PDF?")) return;
             }
+
+            generarPDF(data.resumen);
+            await fetch(GOOGLE_URL, {
+                method: 'POST',
+                body: JSON.stringify({ action: 'finalizarCarga', nroCarga: currentCarga })
+            });
+            alert("Carga Finalizada");
+            location.reload();
         }
 
         function generarPDF(datos) {
@@ -366,10 +417,10 @@
             
             doc.setFont("helvetica", "bold");
             doc.text("Carga Nro: ", 14, 40);
-            doc.text(currentCarga, 40, 40);
+            doc.text(String(currentCarga), 40, 40);
             
             const f = new Date();
-            const fStr = `${f.toLocaleDateString()} ${f.getHours().toString().padStart(2,'0')}:${f.getMinutes().toString().padStart(2,'0')}:${f.getSeconds().toString().padStart(2,'0')}`;
+            const fStr = `${f.toLocaleDateString()} ${f.getHours().toString().padStart(2,'0')}:${f.getMinutes().toString().padStart(2,'0')}`;
             doc.setFontSize(10);
             doc.setFont("helvetica", "normal");
             doc.text(`Fecha Impresión: ${fStr}`, 14, 48);
@@ -389,57 +440,29 @@
             doc.text("UM", 90, y);
             doc.text("TOTAL", 110, y);
             doc.text("CONT", 130, y);
-            doc.text("CHECK", 150, y);
-            doc.text("PALLET N°", 175, y); 
+            doc.text("CHECK", 155, y);
+            doc.text("PALLET N°", 178, y); 
             
             doc.setLineWidth(0.5);
             doc.line(14, y + 2, 200, y + 2);
-            
             y += 10;
             
             datos.forEach(item => {
-                if(y > 275) {
-                    doc.addPage();
-                    y = 20;
-                }
-                
+                if(y > 275) { doc.addPage(); y = 20; }
                 const hayDiferencia = item.scan !== item.total;
-                if(hayDiferencia) {
-                    doc.setFont("helvetica", "bold");
-                } else {
-                    doc.setFont("helvetica", "normal");
-                }
+                doc.setFont("helvetica", hayDiferencia ? "bold" : "normal");
 
                 doc.text(String(item.sku), 14, y);
-                
                 let desc = item.desc || "";
                 if(desc.length > 25) desc = desc.substring(0, 23) + "..";
                 doc.text(desc, 35, y);
-                
                 doc.text(String(item.um), 90, y);
                 doc.text(String(item.total), 110, y);
                 doc.text(String(item.scan), 130, y);
-                
-                // Corrección CHECK: Solo OK o DIF
-                if(!hayDiferencia) {
-                    doc.text("OK", 150, y);
-                } else {
-                    doc.text("DIF", 150, y);
-                }
-                
-                // Corrección PALLET N°: Toma el valor real del item (Columna I del Sheet)
-                doc.text(String(item.pallet || "-"), 175, y);
-                
+                doc.text(hayDiferencia ? "DIF" : "OK", 155, y);
+                doc.text(String(item.pallet || "-"), 178, y);
                 y += 8;
             });
-
-            const pageCount = doc.internal.getNumberOfPages();
-            for(let i = 1; i <= pageCount; i++) {
-                doc.setPage(i);
-                doc.setFont("helvetica", "normal");
-                doc.setFontSize(10);
-                doc.text(`Hoja ${i} de ${pageCount}`, 105, 290, { align: "center" });
-            }
 
             doc.save(`Reporte_Carga_${currentCarga}.pdf`);
         }
