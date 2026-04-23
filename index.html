@@ -12,7 +12,6 @@
         #modalResumen { backdrop-filter: blur(4px); }
         .mic-active { animation: pulse 1.5s infinite; background-color: #ef4444 !important; }
         @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
-        /* Loader para el proceso de finalización */
         #loader { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 200; align-items: center; justify-content: center; color: white; flex-direction: column; }
     </style>
 </head>
@@ -36,7 +35,6 @@
     </header>
 
     <main class="max-w-md mx-auto p-4 space-y-4">
-        
         <section id="stepCarga" class="bg-white p-6 rounded-3xl shadow-sm border border-slate-200">
             <div class="space-y-4">
                 <div>
@@ -94,11 +92,6 @@
                     <input type="number" id="cantInput" placeholder="Cant" class="w-1/2 p-4 text-3xl font-black bg-slate-100 rounded-2xl text-center focus:outline-none">
                     <div class="flex flex-col gap-2 flex-1">
                         <button onclick="guardar()" class="flex-1 bg-green-600 text-white rounded-2xl font-black text-lg">REGISTRAR</button>
-                        <button id="btnVoz" onclick="activarVoz()" class="step-hidden fixed bottom-24 right-6 bg-red-500 text-white p-4 rounded-full shadow-2xl z-50 transition-transform transform active:scale-90">
-        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-8 h-8">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z" />
-        </svg>
-    </button>
                     </div>
                 </div>
             </div>
@@ -106,6 +99,12 @@
             <div id="historial" class="space-y-2 pb-10"></div>
         </section>
     </main>
+
+    <button id="btnVoz" onclick="activarVoz()" class="step-hidden fixed bottom-24 right-6 bg-red-500 text-white p-4 rounded-full shadow-2xl z-50 transition-transform transform active:scale-90">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-8 h-8">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z" />
+        </svg>
+    </button>
 
     <footer id="footerApp" class="step-hidden fixed bottom-0 left-0 right-0 p-4 bg-white/90 border-t flex gap-3 max-w-md mx-auto z-40">
         <button onclick="abrirResumen()" class="flex-1 py-4 bg-slate-200 text-slate-700 rounded-2xl font-bold text-xs">VER RESUMEN</button>
@@ -122,25 +121,20 @@
 
     <script>
         const GOOGLE_URL = "https://script.google.com/macros/s/AKfycbzKjFlPsGUOP1QgLr2FkFvodke-czEuXRmhoLyYmj7a2bgp4ZGEiHNSek6EUhIteEk/exec"; 
-        // Función para los sonidos de éxito/error
+        
         function playBeep(tipo) {
             const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             const oscillator = audioCtx.createOscillator();
             const gainNode = audioCtx.createGain();
-
             oscillator.connect(gainNode);
             gainNode.connect(audioCtx.destination);
-
             if (tipo === 'ok') {
-                oscillator.frequency.setValueAtTime(880, audioCtx.currentTime); // Tono agudo
-                oscillator.type = 'sine';
-                gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                oscillator.frequency.setValueAtTime(880, audioCtx.currentTime);
                 oscillator.start();
                 oscillator.stop(audioCtx.currentTime + 0.1);
             } else {
-                oscillator.frequency.setValueAtTime(220, audioCtx.currentTime); // Tono grave
+                oscillator.frequency.setValueAtTime(220, audioCtx.currentTime);
                 oscillator.type = 'square';
-                gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
                 oscillator.start();
                 oscillator.stop(audioCtx.currentTime + 0.3);
             }
@@ -151,25 +145,16 @@
         let selectedItem = null;
         let nroPalletActual = 1;
         let html5QrCode = null;
-        let bloqueandoSalida = false; // Nueva variable de control
+        let bloqueandoSalida = false;
+        let isSpeaking = false;
 
-        // --- PREVENIR SALIDA ---
-        window.addEventListener('beforeunload', function (e) {
-            if (bloqueandoSalida) {
-                // El mensaje personalizado es ignorado por la mayoría de navegadores modernos por seguridad, 
-                // pero activa el cuadro de diálogo estándar.
-                e.preventDefault();
-                e.returnValue = '';
-            }
+        window.addEventListener('beforeunload', (e) => {
+            if (bloqueandoSalida) { e.preventDefault(); e.returnValue = ''; }
         });
-
-      // --- SISTEMA DE VOZ ---
-        let isSpeaking = false; // Control de voz de la interfaz
 
         const recognition = (window.SpeechRecognition || window.webkitSpeechRecognition) ? new (window.SpeechRecognition || window.webkitSpeechRecognition)() : null;
         if(recognition) {
             recognition.lang = 'es-AR';
-            
             recognition.onresult = (event) => {
                 const texto = event.results[0][0].transcript;
                 const numero = texto.match(/\d+/);
@@ -180,72 +165,47 @@
                 }
                 document.getElementById('btnVoz').classList.remove('mic-active');
             };
-            
-            // Se apaga visualmente si detecta un error o si pasan unos segundos sin escuchar nada
             recognition.onerror = () => document.getElementById('btnVoz').classList.remove('mic-active');
             recognition.onend = () => document.getElementById('btnVoz').classList.remove('mic-active');
         }
 
         function activarVoz() {
-            if(!recognition) return alert("Voz no soportada en este navegador");
-            
-            // Si ya está activo, lo apagamos manualmente
-            if(document.getElementById('btnVoz').classList.contains('mic-active')) {
-                recognition.stop();
-                document.getElementById('btnVoz').classList.remove('mic-active');
-                return;
-            }
-
-            // Si la app está hablando (dando un error), bloqueamos el encendido
-            if(isSpeaking) return; 
-
+            if(!recognition) return alert("Voz no soportada");
+            if(isSpeaking) return;
             document.getElementById('btnVoz').classList.add('mic-active');
-            try { recognition.start(); } catch(e) { console.log("Microfono ya iniciado"); }
+            try { recognition.start(); } catch(e) {}
         }
 
         function decir(t) { 
             const u = new SpeechSynthesisUtterance(t); 
             u.lang = 'es-AR'; 
-            u.rate = 0.9;
-            
-            // Controlamos los estados para saber cuándo termina de hablar
             u.onstart = () => { isSpeaking = true; };
             u.onend = () => { isSpeaking = false; };
-            u.onerror = () => { isSpeaking = false; };
-            
             window.speechSynthesis.speak(u); 
         }
-        // --- CÁMARA ---
+
         function toggleCamara() {
             const readerDiv = document.getElementById('reader');
             if (readerDiv.classList.contains('hidden')) {
                 readerDiv.classList.remove('hidden');
                 html5QrCode = new Html5Qrcode("reader");
-                html5QrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 }, 
-                    (decodedText) => {
-                        document.getElementById('barcode').value = decodedText;
-                        buscarArticulo();
-                        pararCamara();
-                    }
-                );
-            } else {
-                pararCamara();
-            }
+                html5QrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 }, (decodedText) => {
+                    document.getElementById('barcode').value = decodedText;
+                    buscarArticulo();
+                    pararCamara();
+                });
+            } else { pararCamara(); }
         }
 
         function pararCamara() {
             if (html5QrCode) {
-                html5QrCode.stop().then(() => {
-                    document.getElementById('reader').classList.add('hidden');
-                });
+                html5QrCode.stop().then(() => document.getElementById('reader').classList.add('hidden'));
             }
         }
 
-        // --- LÓGICA DE NEGOCIO ---
         function verificarOperador() {
             const val = document.getElementById('operadorSelect').value;
-            if(val === "Otro") document.getElementById('operadorOtro').classList.remove('step-hidden');
-            else document.getElementById('operadorOtro').classList.add('step-hidden');
+            document.getElementById('operadorOtro').classList.toggle('step-hidden', val !== "Otro");
         }
 
         async function iniciar() {
@@ -263,7 +223,7 @@
                 });
                 const data = await res.json();
                 if(data.success) {
-                    bloqueandoSalida = true; // ACTIVAMOS EL BLOQUEO AL INICIAR
+                    bloqueandoSalida = true;
                     document.getElementById('stepCarga').classList.add('step-hidden');
                     document.getElementById('stepOperacion').classList.remove('step-hidden');
                     document.getElementById('footerApp').classList.remove('step-hidden');
@@ -276,386 +236,48 @@
         async function buscarArticulo() {
             let rawValue = document.getElementById('barcode').value.trim();
             if(!rawValue) return;
-
-            let params = { 
-                action: 'buscarArticulo', 
-                nroCarga: currentCarga, 
-                barcode: rawValue 
-            };
-
+            let params = { action: 'buscarArticulo', nroCarga: currentCarga, barcode: rawValue };
             if (rawValue.length >= 30) {
-                try {
-                    const itm = parseInt(rawValue.substring(1, 9), 10).toString();
-                    const cant = parseInt(rawValue.substring(26, 30), 10);
-                    params = { 
-                        action: 'buscarPorPalletCompleto', 
-                        nroCarga: currentCarga, 
-                        itm: itm, 
-                        cantidadEtiqueta: cant 
-                    };
-                } catch(e) { console.error("Error parseando etiqueta larga"); }
+                const itm = parseInt(rawValue.substring(1, 9), 10).toString();
+                const cant = parseInt(rawValue.substring(26, 30), 10);
+                params = { action: 'buscarPorPalletCompleto', nroCarga: currentCarga, itm: itm, cantidadEtiqueta: cant };
             }
-
             try {
-                const res = await fetch(GOOGLE_URL, {
-                    method: 'POST',
-                    body: JSON.stringify(params)
-                });
+                const res = await fetch(GOOGLE_URL, { method: 'POST', body: JSON.stringify(params) });
                 const data = await res.json();
-
                 if(data.success) {
-                    // --- LÓGICA FILTRADO DE UNIDADES DE MEDIDA REPETIDAS ---
-                    
-                    // 1. Agrupamos por UM única, priorizando la fila que no esté completa
                     const opcionesUnicas = [];
                     const umsProcesadas = new Set();
-
                     data.opciones.forEach(op => {
                         if (!umsProcesadas.has(op.um)) {
-                            // Buscamos si hay alguna fila de esta misma UM que todavía falte controlar
                             const filaPendiente = data.opciones.find(f => f.um === op.um && f.scan < f.total);
-                            // Si existe una pendiente, usamos esa, sino la primera que aparezca
                             opcionesUnicas.push(filaPendiente || op);
                             umsProcesadas.add(op.um);
                         }
                     });
-
-                    // 2. Decidimos si mostrar botones o pasar directo
                     if(opcionesUnicas.length === 1) { 
-                        // Si después de filtrar solo queda una UM (ej: todas eran "CAJA"), entra directo
                         prepararRegistro(opcionesUnicas[0], data.cantidadEtiqueta || null); 
                         document.getElementById('btnVoz').classList.remove('step-hidden');
                     } else {
-                        // Si hay UMs distintas (ej: "CAJA" y "UNIDAD"), mostramos los botones
                         const cont = document.getElementById('contenedorUM');
                         cont.innerHTML = '';
                         opcionesUnicas.forEach(op => {
                             const b = document.createElement('button');
-                            b.className = "w-full p-4 bg-white border border-blue-200 rounded-2xl font-black text-xl text-center shadow-sm active:bg-blue-100";
+                            b.className = "w-full p-4 bg-white border border-blue-200 rounded-2xl font-black text-xl mb-2";
                             b.innerText = op.um;
                             b.onclick = () => prepararRegistro(op, data.cantidadEtiqueta || null);
                             cont.appendChild(b);
                         });
                         document.getElementById('secUM').classList.remove('step-hidden');
                     }
-                    // -------------------------------------------------------
-                } else { 
-                    playBeep('err'); 
-                    decir(data.msg || "No encontrado");
-                    alert(data.msg); 
-                }
-            } catch (error) {
-                alert("Error de conexión al buscar artículo.");
-            }
+                } else { playBeep('err'); decir(data.msg); alert(data.msg); }
+            } catch (e) { alert("Error de conexión."); }
         }
+
         function prepararRegistro(item, cantSugerida = null) {
             selectedItem = item;
             document.getElementById('txtArt').innerText = item.sku;
             document.getElementById('txtDesc').innerText = `${item.desc} (${item.um})`;
             document.getElementById('secUM').classList.add('step-hidden');
             document.getElementById('secCantidad').classList.remove('step-hidden');
-            
-            if(cantSugerida) {
-                document.getElementById('cantInput').value = cantSugerida;
-                decir("Pallet detectado. Cantidad " + cantSugerida);
-            } else {
-                decir("Artículo " + item.sku + ", " + item.um);
-            }
-            document.getElementById('cantInput').focus();
-        }
-
-        async function guardar() {
-            const cant = parseInt(document.getElementById('cantInput').value);
-            if(!cant) return;
-            const finalEscaneado = (selectedItem.actual || 0) + cant;
-            
-            if (finalEscaneado > selectedItem.total) {
-                if(recognition) recognition.stop();
-                document.getElementById('btnVoz').classList.remove('mic-active');
-                playBeep('err'); 
-                decir("Error. Supera la carga.");
-                return alert("Error: La cantidad supera lo solicitado. Cantidad en carga: " + selectedItem.total);
-            }
-            
-            try {
-                const res = await fetch(GOOGLE_URL, {
-                    method: 'POST',
-                    body: JSON.stringify({
-                        action: 'registrarCantidad', 
-                        nroCarga: currentCarga, 
-                        indexFila: selectedItem.index, 
-                        nuevaSuma: finalEscaneado,
-                        nroPallet: nroPalletActual
-                    })
-                });
-                const data = await res.json();
-                if(data.success) {
-                    playBeep('ok');
-                    addHistorial(selectedItem.sku, cant, selectedItem.um, selectedItem.index, finalEscaneado);
-                    document.getElementById('btnVoz').classList.add('step-hidden');
-                    document.getElementById('secCantidad').classList.add('step-hidden');
-                    document.getElementById('barcode').value = '';   
-                    document.getElementById('cantInput').value = ''; 
-                    document.getElementById('barcode').focus();
-                    actualizarContadores();
-                }
-            } catch (error) {
-                alert("Error de conexión al guardar. Revisa tu internet e intenta de nuevo.");
-                playBeep('err');
-            }
-        }
-
-        function addHistorial(sku, c, um, index, totalNuevo) {
-            const list = document.getElementById('historial');
-            const d = document.createElement('div');
-            d.id = `hist-${Date.now()}`;
-            d.className = "bg-white p-3 rounded-xl border border-slate-200 text-sm flex justify-between items-center shadow-sm mb-2";
-            d.innerHTML = `
-                <div><b>${sku}</b> (${um}) - P${nroPalletActual}</div>
-                <div class="flex items-center gap-3">
-                    <div class="font-black text-green-600">+${c}</div>
-                    <button onclick="borrarRegistro('${sku}', ${c}, ${index}, ${totalNuevo}, '${d.id}')" class="text-xs bg-red-100 text-red-600 px-2 py-1 rounded-lg">✕</button>
-                </div>`;
-            list.prepend(d);
-        }
-
-        async function borrarRegistro(sku, cant, index, totalActualEnSheet, divId) {
-            if(!confirm(`¿Borrar el ingreso de ${cant} para ${sku}?`)) return;
-            const nuevaSuma = totalActualEnSheet - cant;
-            
-            try {
-                const res = await fetch(GOOGLE_URL, {
-                    method: 'POST',
-                    body: JSON.stringify({
-                        action: 'registrarCantidad', 
-                        nroCarga: currentCarga, 
-                        indexFila: index, 
-                        nuevaSuma: nuevaSuma,
-                        nroPallet: nroPalletActual
-                    })
-                });
-                const data = await res.json();
-                if(data.success) {
-                    document.getElementById(divId).remove();
-                    actualizarContadores();
-                    decir("Registro borrado");
-                }
-            } catch (error) {
-                alert("Error de conexión al intentar borrar. Revisa tu internet.");
-            }
-        }
-        async function actualizarContadores() {
-            const res = await fetch(GOOGLE_URL, {
-                method: 'POST',
-                body: JSON.stringify({ action: 'obtenerResumen', nroCarga: currentCarga })
-            });
-            const data = await res.json();
-            if(data.success) {
-                let cT=0, cS=0, uT=0, uS=0;
-                data.resumen.forEach(i => {
-                    if(i.um.includes("CAJA")) { cT += i.total; cS += i.scan; }
-                    else { uT += i.total; uS += i.scan; }
-                });
-                document.getElementById('contadores').innerHTML = `${cS}/${cT} CA<br>${uS}/${uT} UN`;
-            }
-        }
-
-        function cerrarPallet() {
-            nroPalletActual++;
-            document.getElementById('palletDisplay').innerText = `PALLET N° ${nroPalletActual}`;
-            decir("Pallet " + nroPalletActual);
-            playBeep('ok');
-        }
-
-        async function abrirResumen() {
-            document.getElementById('modalResumen').classList.remove('step-hidden');
-            const res = await fetch(GOOGLE_URL, {
-                method: 'POST', 
-                body: JSON.stringify({action:'obtenerResumen', nroCarga: currentCarga})
-            });
-            const data = await res.json();
-            const list = document.getElementById('listaResumen');
-            list.innerHTML = '';
-            data.resumen.forEach(i => {
-                const d = document.createElement('div');
-                const esCorrecto = i.scan === i.total;
-                const bgColor = esCorrecto ? 'bg-green-100 border-green-300' : 'bg-red-100 border-red-300';
-                const textColor = esCorrecto ? 'text-green-800' : 'text-red-800';
-                d.className = `p-3 rounded-xl border mb-2 text-xs shadow-sm ${bgColor} ${textColor}`;
-                d.innerHTML = `<div class="flex justify-between items-center mb-1"><b class="text-sm">${i.sku}</b><span class="font-black uppercase">${esCorrecto ? '✓ OK' : '⚠ Dif'}</span></div><div>${i.um}: <b>${i.scan}</b> de ${i.total}</div>`;
-                list.appendChild(d);
-            });
-        }
-
-        function cerrarResumen() { document.getElementById('modalResumen').classList.add('step-hidden'); }
-
-        // --- FINALIZACIÓN Y PDF ---
-        async function confirmarFinalizar() {
-            const res = await fetch(GOOGLE_URL, {
-                method: 'POST',
-                body: JSON.stringify({ action: 'obtenerResumen', nroCarga: currentCarga })
-            });
-            const data = await res.json();
-            
-            const diferencias = data.resumen.filter(i => i.scan !== i.total).length;
-            if(diferencias > 0) {
-                decir("Atención. Tenés " + diferencias + " diferencias.");
-                if(!confirm(`¡CUIDADO! Hay ${diferencias} artículos con diferencias.\n\n¿Deseas finalizar y subir reporte a Drive?`)) return;
-            } else {
-                if(!confirm("¿Finalizar carga y generar PDF en Drive?")) return;
-            }
-
-            document.getElementById('loader').style.display = 'flex';
-
-            try {
-                const doc = generarPDF(data.resumen);
-                const pdfBase64 = doc.output('datauristring').split(',')[1];
-
-                const driveResp = await fetch(GOOGLE_URL, {
-                    method: 'POST',
-                    body: JSON.stringify({ 
-                        action: 'guardarPDF', 
-                        nroCarga: currentCarga, 
-                        base64: pdfBase64, 
-                        nombreArchivo: `Reporte_Carga_${currentCarga}_${nombreOp}.pdf` 
-                    })
-                });
-                
-                doc.save(`Reporte_Carga_${currentCarga}.pdf`);
-
-                await fetch(GOOGLE_URL, {
-                    method: 'POST',
-                    body: JSON.stringify({ action: 'finalizarCarga', nroCarga: currentCarga })
-                });
-
-                alert("Proceso completado: PDF guardado en Drive y carga finalizada.");
-                
-                bloqueandoSalida = false; // LIBERAMOS EL BLOQUEO PARA PODER RECARGAR
-                location.reload(); 
-
-            } catch (err) {
-        console.error(err);
-        alert("Error en el proceso final: " + err.message);
-    } finally {
-        // AQUÍ PEGAS LO DE LA IMAGEN
-        document.getElementById('loader').style.display = 'none';
-        // Esto asegura que el circulito de carga se quite siempre, 
-        // aunque haya habido un error.
-    }
-
-function generarPDF(datos) {
-            const { jsPDF } = window.jspdf;
-            const doc = new jsPDF();
-            
-            doc.setFont("helvetica", "bold");
-            doc.setFontSize(22);
-            doc.text("REPORTE DE CONTROL DE CARGA", 14, 20);
-            
-            doc.setFontSize(12);
-            doc.text("Verificador: ", 14, 32);
-            doc.setFont("helvetica", "normal");
-            doc.text(nombreOp, 40, 32);
-            
-            doc.setFont("helvetica", "bold");
-            doc.text("Carga Nro: ", 14, 40);
-            doc.text(String(currentCarga), 40, 40);
-            
-            const f = new Date();
-            const fStr = `${f.toLocaleDateString()} ${f.getHours().toString().padStart(2,'0')}:${f.getMinutes().toString().padStart(2,'0')}`;
-            doc.setFontSize(10);
-            doc.setFont("helvetica", "normal");
-            doc.text(`Fecha Impresión: ${fStr}`, 14, 48);
-
-            let tC = 0, tU = 0, totalCajasPicking = 0;
-            datos.forEach(i => {
-                if(i.um.includes("CAJA")) tC += i.scan;
-                else tU += i.scan;
-                
-                if((i.pmph || "").toLowerCase().trim() === "picking" && i.um.includes("CAJA")) {
-                    totalCajasPicking += i.scan;
-                }
-            });
-
-            doc.setFont("helvetica", "bold");
-            doc.text(`TOTAL CONTROLADO -> CAJAS: ${tC} | UNIDADES: ${tU}`, 14, 56);
-            doc.setTextColor(200, 0, 0);
-            doc.text(`TOTAL CAJAS PICKING: ${totalCajasPicking}`, 14, 63);
-            doc.setTextColor(0, 0, 0);
-            
-            let y = 72;
-            doc.setFontSize(9);
-            doc.text("SKU", 14, y);
-            doc.text("DESCRIPCION", 35, y);
-            doc.text("UM", 90, y);
-            doc.text("TOTAL", 110, y);
-            doc.text("CONT", 130, y);
-            doc.text("CHECK", 155, y);
-            doc.text("PALLET N°", 178, y); 
-            
-            doc.setLineWidth(0.5);
-            doc.line(14, y + 2, 200, y + 2);
-            y += 10;
-            
-            datos.forEach(item => {
-                if(y > 275) { doc.addPage(); y = 20; }
-                const hayDiferencia = item.scan !== item.total;
-                doc.setFont("helvetica", hayDiferencia ? "bold" : "normal");
-                doc.text(String(item.sku), 14, y);
-                let desc = item.desc || "";
-                if(desc.length > 25) desc = desc.substring(0, 23) + "..";
-                doc.text(desc, 35, y);
-                doc.text(String(item.um), 90, y);
-                doc.text(String(item.total), 110, y);
-                doc.text(String(item.scan), 130, y);
-                doc.text(hayDiferencia ? "DIF" : "OK", 155, y);
-                doc.text(String(item.pallet || "-"), 178, y);
-                y += 8;
-            });
-
-            const resumenPallets = {};
-            datos.forEach(item => {
-                if ((item.pmph || "").toLowerCase().trim() === "picking") {
-                    let p = String(item.pallet || "-");
-                    if(p !== "-" && p !== "") {
-                        if (!resumenPallets[p]) resumenPallets[p] = { CA: 0, UN: 0 };
-                        if (item.um.includes("CAJA")) resumenPallets[p].CA += item.scan;
-                        else resumenPallets[p].UN += item.scan;
-                    }
-                }
-            });
-
-            const keys = Object.keys(resumenPallets).sort((a,b)=> parseInt(a)-parseInt(b));
-            if(keys.length > 0) {
-                y += 5;
-                if(y > 250) { doc.addPage(); y = 20; }
-                doc.setFont("helvetica", "bold");
-                doc.text("RESUMEN DE PALLETS (PICKING):", 14, y);
-                y += 7;
-                doc.setFont("helvetica", "normal");
-                keys.forEach(p => {
-                    let txt = `Pallet N° ${p} = `;
-                    let partes = [];
-                    if(resumenPallets[p].CA > 0) partes.push(`${resumenPallets[p].CA} CA`);
-                    if(resumenPallets[p].UN > 0) partes.push(`${resumenPallets[p].UN} UN`);
-                    doc.text(txt + partes.join(" / "), 14, y);
-                    y += 6;
-                });
-            }
-          // --- CIERRE DE LÓGICA DE PIE DE PÁGINA ---
-            const pageCount = doc.internal.getNumberOfPages();
-            for (let i = 1; i <= pageCount; i++) {
-                doc.setPage(i);
-                doc.setFontSize(8);
-                doc.setTextColor(150);
-                doc.setFont("helvetica", "normal");
-                
-                // Texto izquierda: Leyenda
-                doc.text("Desarrollo creado por M2 Consultoría Digital", 14, 290);
-                // Texto derecha: Numeración
-                doc.text(`Página ${i} de ${pageCount}`, 195, 290, { align: "right" });
-            }
-            return doc;
-        }
-    </script>
-</body>
-</html>
+            if
