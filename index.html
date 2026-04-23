@@ -94,11 +94,7 @@
                     <input type="number" id="cantInput" placeholder="Cant" class="w-1/2 p-4 text-3xl font-black bg-slate-100 rounded-2xl text-center focus:outline-none">
                     <div class="flex flex-col gap-2 flex-1">
                         <button onclick="guardar()" class="flex-1 bg-green-600 text-white rounded-2xl font-black text-lg">REGISTRAR</button>
-                        <button id="btnVoz" onclick="activarVoz()" class="step-hidden fixed bottom-24 right-6 bg-red-500 text-white p-4 rounded-full shadow-2xl z-50 transition-transform transform active:scale-90">
-        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-8 h-8">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z" />
-        </svg>
-    </button>
+                        <button id="btnVoz" onclick="activarVoz()" class="bg-slate-200 text-slate-700 py-2 rounded-xl font-bold text-sm">🎙️ VOZ</button>
                     </div>
                 </div>
             </div>
@@ -140,13 +136,10 @@
             }
         });
 
-      // --- SISTEMA DE VOZ ---
-        let isSpeaking = false; // Control de voz de la interfaz
-
+        // --- SISTEMA DE VOZ ---
         const recognition = (window.SpeechRecognition || window.webkitSpeechRecognition) ? new (window.SpeechRecognition || window.webkitSpeechRecognition)() : null;
         if(recognition) {
             recognition.lang = 'es-AR';
-            
             recognition.onresult = (event) => {
                 const texto = event.results[0][0].transcript;
                 const numero = texto.match(/\d+/);
@@ -157,41 +150,39 @@
                 }
                 document.getElementById('btnVoz').classList.remove('mic-active');
             };
-            
-            // Se apaga visualmente si detecta un error o si pasan unos segundos sin escuchar nada
             recognition.onerror = () => document.getElementById('btnVoz').classList.remove('mic-active');
-            recognition.onend = () => document.getElementById('btnVoz').classList.remove('mic-active');
         }
 
         function activarVoz() {
-            if(!recognition) return alert("Voz no soportada en este navegador");
-            
-            // Si ya está activo, lo apagamos manualmente
-            if(document.getElementById('btnVoz').classList.contains('mic-active')) {
-                recognition.stop();
-                document.getElementById('btnVoz').classList.remove('mic-active');
-                return;
-            }
-
-            // Si la app está hablando (dando un error), bloqueamos el encendido
-            if(isSpeaking) return; 
-
+            if(!recognition) return alert("Voz no soportada");
             document.getElementById('btnVoz').classList.add('mic-active');
-            try { recognition.start(); } catch(e) { console.log("Microfono ya iniciado"); }
+            recognition.start();
+        }
+
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        function playBeep(type) {
+            if(audioCtx.state === 'suspended') audioCtx.resume();
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            if(type === 'ok') {
+                osc.type = 'sine'; osc.frequency.setValueAtTime(800, audioCtx.currentTime);
+                gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.15);
+            } else {
+                osc.type = 'sawtooth'; osc.frequency.setValueAtTime(150, audioCtx.currentTime);
+                gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.6);
+            }
         }
 
         function decir(t) { 
             const u = new SpeechSynthesisUtterance(t); 
             u.lang = 'es-AR'; 
             u.rate = 0.9;
-            
-            // Controlamos los estados para saber cuándo termina de hablar
-            u.onstart = () => { isSpeaking = true; };
-            u.onend = () => { isSpeaking = false; };
-            u.onerror = () => { isSpeaking = false; };
-            
             window.speechSynthesis.speak(u); 
         }
+
         // --- CÁMARA ---
         function toggleCamara() {
             const readerDiv = document.getElementById('reader');
@@ -301,7 +292,6 @@
                     if(opcionesUnicas.length === 1) { 
                         // Si después de filtrar solo queda una UM (ej: todas eran "CAJA"), entra directo
                         prepararRegistro(opcionesUnicas[0], data.cantidadEtiqueta || null); 
-                        document.getElementById('btnVoz').classList.remove('step-hidden');
                     } else {
                         // Si hay UMs distintas (ej: "CAJA" y "UNIDAD"), mostramos los botones
                         const cont = document.getElementById('contenedorUM');
@@ -347,10 +337,6 @@
             const finalEscaneado = (selectedItem.actual || 0) + cant;
             
             if (finalEscaneado > selectedItem.total) {
-                // FORZAR APAGADO DEL MICRÓFONO
-                if(recognition) recognition.stop();
-                document.getElementById('btnVoz').classList.remove('mic-active');
-
                 playBeep('err'); 
                 decir("Error. Supera la carga.");
                 return alert("Error: La cantidad supera lo solicitado. Cantidad en carga: " + selectedItem.total);
@@ -370,7 +356,6 @@
             if(data.success) {
                 playBeep('ok');
                 addHistorial(selectedItem.sku, cant, selectedItem.um, selectedItem.index, finalEscaneado);
-                document.getElementById('btnVoz').classList.add('step-hidden');
                 
                 // --- LAS MODIFICACIONES ESTÁN AQUÍ ---
                 document.getElementById('secCantidad').classList.add('step-hidden');
