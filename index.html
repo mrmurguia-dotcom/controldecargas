@@ -1,179 +1,588 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CONTROL DE CARGAS - M2</title>
-
-<script src="https://cdn.tailwindcss.com"></script>
-<script src="https://unpkg.com/html5-qrcode"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-
-<style>
-.step-hidden { display: none !important; }
-#modalResumen { backdrop-filter: blur(4px); }
-.mic-active { animation: pulse 1.5s infinite; background-color: #ef4444 !important; }
-@keyframes pulse {
-0% { opacity: 1; }
-50% { opacity: 0.5; }
-100% { opacity: 1; }
-}
-#loader {
-display: none;
-position: fixed;
-inset: 0;
-background: rgba(0,0,0,0.7);
-z-index: 200;
-align-items: center;
-justify-content: center;
-color: white;
-flex-direction: column;
-}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CONTROL DE CARGAS - M2</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        .step-hidden { display: none !important; }
+        #modalResumen { backdrop-filter: blur(4px); }
+        .mic-active { animation: pulse 1.5s infinite; background-color: #ef4444 !important; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+        /* Loader para el proceso de finalización */
+        #loader { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 200; align-items: center; justify-content: center; color: white; flex-direction: column; }
+    </style>
 </head>
-
 <body class="bg-slate-100 min-h-screen pb-24">
 
-<div id="loader">
-<div class="animate-spin rounded-full h-16 w-16 border-t-4 border-white mb-4"></div>
-<p class="font-bold">Procesando Reporte y Drive...</p>
-</div>
+    <div id="loader">
+        <div class="animate-spin rounded-full h-16 w-16 border-t-4 border-white mb-4"></div>
+        <p class="font-bold">Procesando Reporte y Drive...</p>
+    </div>
 
-<header class="bg-blue-900 text-white p-4 sticky top-0 z-50 shadow-md">
-<div class="max-w-md mx-auto flex justify-between items-center">
-<div>
-<h1 class="font-black text-xl leading-tight">CONTROL DE CARGAS AMBALOG</h1>
-<p class="text-[10px] text-blue-300 font-bold uppercase tracking-wider">M2 Consultoría Digital</p>
-</div>
-<div id="contadores" class="text-[10px] bg-blue-800 px-3 py-1 rounded-lg font-mono text-right">
-ESPERANDO...
-</div>
-</div>
-</header>
+    <header class="bg-blue-900 text-white p-4 sticky top-0 z-50 shadow-md">
+        <div class="max-w-md mx-auto flex justify-between items-center">
+            <div>
+                <h1 class="font-black text-xl leading-tight">CONTROL DE CARGAS AMBALOG</h1>
+                <p class="text-[10px] text-blue-300 font-bold uppercase tracking-wider">M2 Consultoría Digital</p>
+            </div>
+            <div id="contadores" class="text-[10px] bg-blue-800 px-3 py-1 rounded-lg font-mono text-right">
+                ESPERANDO...
+            </div>
+        </div>
+    </header>
 
-<main class="max-w-md mx-auto p-4 space-y-4">
+    <main class="max-w-md mx-auto p-4 space-y-4">
+        
+        <section id="stepCarga" class="bg-white p-6 rounded-3xl shadow-sm border border-slate-200">
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Verificador</label>
+                    <select id="operadorSelect" onchange="verificarOperador()" class="w-full p-4 bg-slate-50 rounded-2xl font-bold focus:outline-none">
+                        <option value="">Seleccione Verificador...</option>
+                        <option value="Omar Dubi">Omar Dubi</option>
+                        <option value="Jose Servin">Jose Servin</option>
+                        <option value="Maxi Murray">Maxi Murray</option>
+                        <option value="Diego Murcia">Diego Murcia</option>
+                        <option value="Otro">Otro...</option>
+                    </select>
+                    <input type="text" id="operadorOtro" placeholder="Nombre del verificador..." class="step-hidden w-full mt-2 p-4 bg-slate-50 rounded-2xl font-bold focus:outline-none border border-slate-200">
+                </div>
 
-<section id="stepCarga" class="bg-white p-6 rounded-3xl shadow-sm border border-slate-200">
-<div class="space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Nro Carga</label>
+                    <div class="flex gap-2">
+                        <input type="number" id="nroCarga" placeholder="Ej: 8612" class="flex-1 p-4 bg-slate-50 rounded-2xl text-xl font-bold focus:outline-none">
+                        <button onclick="iniciar()" id="btnIniciar" class="bg-blue-600 text-white px-6 rounded-2xl font-bold">OK</button>
+                    </div>
+                </div>
+            </div>
+        </section>
 
-<div>
-<label class="block text-xs font-bold text-slate-400 uppercase mb-1">Verificador</label>
-<select id="operadorSelect" onchange="verificarOperador()" class="w-full p-4 bg-slate-50 rounded-2xl font-bold focus:outline-none">
-<option value="">Seleccione Verificador...</option>
-<option value="Omar Dubi">Omar Dubi</option>
-<option value="Jose Servin">Jose Servin</option>
-<option value="Maxi Murray">Maxi Murray</option>
-<option value="Diego Murcia">Diego Murcia</option>
-<option value="Otro">Otro...</option>
-</select>
+        <section id="stepOperacion" class="step-hidden space-y-4">
+            <div class="bg-white p-4 rounded-3xl shadow-sm border border-slate-200">
+                <div class="flex justify-between items-center mb-2">
+                    <label class="block text-xs font-bold text-slate-400 uppercase">Identificar Producto</label>
+                    <span id="palletDisplay" class="bg-orange-100 text-orange-700 px-3 py-1 rounded-full text-xs font-black">PALLET N° 1</span>
+                </div>
+                <div class="flex gap-2">
+                    <input type="text" id="barcode" placeholder="SKU o Etiqueta Pallet" class="flex-1 p-4 bg-yellow-50 rounded-2xl font-bold focus:outline-none">
+                    <button onclick="buscarArticulo()" class="bg-blue-600 text-white px-4 rounded-2xl font-bold text-sm">OK</button>
+                    <button onclick="toggleCamara()" class="bg-slate-800 text-white px-4 rounded-2xl text-xl">📷</button>
+                </div>
+                <div id="reader" class="mt-4 rounded-2xl overflow-hidden hidden"></div>
+            </div>
 
-<input type="text" id="operadorOtro" placeholder="Nombre del verificador..."
-class="step-hidden w-full mt-2 p-4 bg-slate-50 rounded-2xl font-bold focus:outline-none border border-slate-200">
-</div>
+            <div id="secUM" class="step-hidden bg-blue-50 p-4 rounded-3xl border-2 border-blue-200">
+                <p class="text-xs font-black text-blue-800 mb-3 uppercase">Seleccione Presentación:</p>
+                <div id="contenedorUM" class="grid grid-cols-1 gap-2"></div>
+            </div>
 
-<div>
-<label class="block text-xs font-bold text-slate-400 uppercase mb-1">Nro Carga</label>
-<div class="flex gap-2">
-<input type="number" id="nroCarga" placeholder="Ej: 8612"
-class="flex-1 p-4 bg-slate-50 rounded-2xl text-xl font-bold focus:outline-none">
-<button onclick="iniciar()" id="btnIniciar"
-class="bg-blue-600 text-white px-6 rounded-2xl font-bold">OK</button>
-</div>
-</div>
+            <div id="secCantidad" class="step-hidden bg-white p-6 rounded-3xl shadow-xl border-t-4 border-blue-900">
+                <div class="flex justify-between items-start mb-2">
+                    <div>
+                        <h2 id="txtArt" class="text-2xl font-black text-slate-900"></h2>
+                        <p id="txtDesc" class="text-sm text-slate-500"></p>
+                    </div>
+                    <button onclick="cerrarPallet()" class="bg-orange-500 text-white px-3 py-2 rounded-xl text-[10px] font-bold">CAMBIAR PALLET</button>
+                </div>
+                
+                <div class="flex gap-3 mt-4">
+                    <input type="number" id="cantInput" placeholder="Cant" class="w-1/2 p-4 text-3xl font-black bg-slate-100 rounded-2xl text-center focus:outline-none">
+                    <div class="flex flex-col gap-2 flex-1">
+                        <button onclick="guardar()" class="flex-1 bg-green-600 text-white rounded-2xl font-black text-lg">REGISTRAR</button>
+                        <button id="btnVoz" onclick="activarVoz()" class="bg-slate-200 text-slate-700 py-2 rounded-xl font-bold text-sm">🎙️ VOZ</button>
+                    </div>
+                </div>
+            </div>
 
-</div>
-</section>
+            <div id="historial" class="space-y-2 pb-10"></div>
+        </section>
+    </main>
 
-<section id="stepOperacion" class="step-hidden space-y-4">
+    <footer id="footerApp" class="step-hidden fixed bottom-0 left-0 right-0 p-4 bg-white/90 border-t flex gap-3 max-w-md mx-auto z-40">
+        <button onclick="abrirResumen()" class="flex-1 py-4 bg-slate-200 text-slate-700 rounded-2xl font-bold text-xs">VER RESUMEN</button>
+        <button onclick="confirmarFinalizar()" class="flex-1 py-4 bg-red-600 text-white rounded-2xl font-bold text-xs">FINALIZAR CARGA</button>
+    </footer>
 
-<div class="bg-white p-4 rounded-3xl shadow-sm border border-slate-200">
-<div class="flex justify-between items-center mb-2">
-<label class="block text-xs font-bold text-slate-400 uppercase">Identificar Producto</label>
-<span id="palletDisplay" class="bg-orange-100 text-orange-700 px-3 py-1 rounded-full text-xs font-black">
-PALLET N° 1
-</span>
-</div>
+    <div id="modalResumen" class="step-hidden fixed inset-0 bg-black/60 z-[100] p-4 flex items-center justify-center">
+        <div class="bg-white w-full max-w-xs rounded-3xl max-h-[80vh] flex flex-col p-6 shadow-2xl">
+            <h3 class="font-black text-xl mb-4 text-blue-900">Resumen Carga</h3>
+            <div id="listaResumen" class="flex-1 overflow-y-auto space-y-3 text-sm border-y py-4"></div>
+            <button onclick="cerrarResumen()" class="mt-4 w-full py-3 bg-blue-900 text-white rounded-xl font-bold">CERRAR</button>
+        </div>
+    </div>
 
-<div class="flex gap-2">
-<input type="text" id="barcode" placeholder="SKU o Etiqueta Pallet"
-class="flex-1 p-4 bg-yellow-50 rounded-2xl font-bold focus:outline-none">
+    <script>
+        const GOOGLE_URL = "https://script.google.com/macros/s/AKfycbzKjFlPsGUOP1QgLr2FkFvodke-czEuXRmhoLyYmj7a2bgp4ZGEiHNSek6EUhIteEk/exec"; 
+        
+        let currentCarga = "";
+        let nombreOp = "";
+        let selectedItem = null;
+        let nroPalletActual = 1;
+        let html5QrCode = null;
+        let bloqueandoSalida = false; // Nueva variable de control
 
-<button onclick="buscarArticulo()" class="bg-blue-600 text-white px-4 rounded-2xl font-bold text-sm">OK</button>
-<button onclick="toggleCamara()" class="bg-slate-800 text-white px-4 rounded-2xl text-xl">📷</button>
-</div>
+        // --- PREVENIR SALIDA ---
+        window.addEventListener('beforeunload', function (e) {
+            if (bloqueandoSalida) {
+                // El mensaje personalizado es ignorado por la mayoría de navegadores modernos por seguridad, 
+                // pero activa el cuadro de diálogo estándar.
+                e.preventDefault();
+                e.returnValue = '';
+            }
+        });
 
-<div id="reader" class="mt-4 rounded-2xl overflow-hidden hidden"></div>
-</div>
+        // --- SISTEMA DE VOZ ---
+        const recognition = (window.SpeechRecognition || window.webkitSpeechRecognition) ? new (window.SpeechRecognition || window.webkitSpeechRecognition)() : null;
+        if(recognition) {
+            recognition.lang = 'es-AR';
+            recognition.onresult = (event) => {
+                const texto = event.results[0][0].transcript;
+                const numero = texto.match(/\d+/);
+                if(numero) {
+                    document.getElementById('cantInput').value = numero[0];
+                    decir("Registrando " + numero[0]);
+                    guardar();
+                }
+                document.getElementById('btnVoz').classList.remove('mic-active');
+            };
+            recognition.onerror = () => document.getElementById('btnVoz').classList.remove('mic-active');
+        }
 
-<div id="secUM" class="step-hidden bg-blue-50 p-4 rounded-3xl border-2 border-blue-200">
-<p class="text-xs font-black text-blue-800 mb-3 uppercase">Seleccione Presentación:</p>
-<div id="contenedorUM" class="grid grid-cols-1 gap-2"></div>
-</div>
+        function activarVoz() {
+            if(!recognition) return alert("Voz no soportada");
+            document.getElementById('btnVoz').classList.add('mic-active');
+            recognition.start();
+        }
 
-<div id="secCantidad" class="step-hidden bg-white p-6 rounded-3xl shadow-xl border-t-4 border-blue-900">
-<div class="flex justify-between items-start mb-2">
-<div>
-<h2 id="txtArt" class="text-2xl font-black text-slate-900"></h2>
-<p id="txtDesc" class="text-sm text-slate-500"></p>
-</div>
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        function playBeep(type) {
+            if(audioCtx.state === 'suspended') audioCtx.resume();
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            if(type === 'ok') {
+                osc.type = 'sine'; osc.frequency.setValueAtTime(800, audioCtx.currentTime);
+                gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.15);
+            } else {
+                osc.type = 'sawtooth'; osc.frequency.setValueAtTime(150, audioCtx.currentTime);
+                gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.6);
+            }
+        }
 
-<button onclick="cerrarPallet()" class="bg-orange-500 text-white px-3 py-2 rounded-xl text-[10px] font-bold">
-CAMBIAR PALLET
-</button>
-</div>
+        function decir(t) { 
+            const u = new SpeechSynthesisUtterance(t); 
+            u.lang = 'es-AR'; 
+            u.rate = 0.9;
+            window.speechSynthesis.speak(u); 
+        }
 
-<div class="flex gap-3 mt-4">
-<input type="number" id="cantInput" placeholder="Cant"
-class="w-1/2 p-4 text-3xl font-black bg-slate-100 rounded-2xl text-center focus:outline-none">
+        // --- CÁMARA ---
+        function toggleCamara() {
+            const readerDiv = document.getElementById('reader');
+            if (readerDiv.classList.contains('hidden')) {
+                readerDiv.classList.remove('hidden');
+                html5QrCode = new Html5Qrcode("reader");
+                html5QrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 }, 
+                    (decodedText) => {
+                        document.getElementById('barcode').value = decodedText;
+                        buscarArticulo();
+                        pararCamara();
+                    }
+                );
+            } else {
+                pararCamara();
+            }
+        }
 
-<div class="flex flex-col gap-2 flex-1">
-<button onclick="guardar()" class="flex-1 bg-green-600 text-white rounded-2xl font-black text-lg">
-REGISTRAR
-</button>
+        function pararCamara() {
+            if (html5QrCode) {
+                html5QrCode.stop().then(() => {
+                    document.getElementById('reader').classList.add('hidden');
+                });
+            }
+        }
 
-<button id="btnVoz" onclick="activarVoz()"
-class="bg-slate-200 text-slate-700 py-2 rounded-xl font-bold text-sm">
-🎙️ VOZ
-</button>
-</div>
-</div>
-</div>
+        // --- LÓGICA DE NEGOCIO ---
+        function verificarOperador() {
+            const val = document.getElementById('operadorSelect').value;
+            if(val === "Otro") document.getElementById('operadorOtro').classList.remove('step-hidden');
+            else document.getElementById('operadorOtro').classList.add('step-hidden');
+        }
 
-<div id="historial" class="space-y-2 pb-10"></div>
+        async function iniciar() {
+            const sel = document.getElementById('operadorSelect').value;
+            nombreOp = sel === "Otro" ? document.getElementById('operadorOtro').value : sel;
+            currentCarga = document.getElementById('nroCarga').value;
+            if(!nombreOp || !currentCarga) return alert("Complete Verificador y Nro Carga.");
+            const btn = document.getElementById('btnIniciar');
+            btn.innerText = "⏳";
+            btn.disabled = true;
+            try {
+                const res = await fetch(GOOGLE_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ action: 'validarCarga', nroCarga: currentCarga })
+                });
+                const data = await res.json();
+                if(data.success) {
+                    bloqueandoSalida = true; // ACTIVAMOS EL BLOQUEO AL INICIAR
+                    document.getElementById('stepCarga').classList.add('step-hidden');
+                    document.getElementById('stepOperacion').classList.remove('step-hidden');
+                    document.getElementById('footerApp').classList.remove('step-hidden');
+                    actualizarContadores();
+                } else { alert(data.msg || "Carga no encontrada"); }
+            } catch(e) { alert("Error de conexión."); }
+            finally { btn.innerText = "OK"; btn.disabled = false; }
+        }
 
-</section>
-</main>
+        async function buscarArticulo() {
+            const rawValue = document.getElementById('barcode').value.trim();
+            if(!rawValue) return;
 
-<footer id="footerApp"
-class="step-hidden fixed bottom-0 left-0 right-0 p-4 bg-white/90 border-t flex gap-3 max-w-md mx-auto z-40">
-<button onclick="abrirResumen()" class="flex-1 py-4 bg-slate-200 text-slate-700 rounded-2xl font-bold text-xs">
-VER RESUMEN
-</button>
-<button onclick="confirmarFinalizar()" class="flex-1 py-4 bg-red-600 text-white rounded-2xl font-bold text-xs">
-FINALIZAR CARGA
-</button>
-</footer>
+            let params = { action: 'buscarArticulo', nroCarga: currentCarga, barcode: rawValue };
 
-<div id="modalResumen"
-class="step-hidden fixed inset-0 bg-black/60 z-[100] p-4 flex items-center justify-center">
+            if (rawValue.length >= 30) {
+                try {
+                    const itm = parseInt(rawValue.substring(1, 9), 10).toString();
+                    const cant = parseInt(rawValue.substring(26, 30), 10);
+                    params = { 
+                        action: 'buscarPorPalletCompleto', 
+                        nroCarga: currentCarga, 
+                        itm: itm, 
+                        cantidadEtiqueta: cant 
+                    };
+                } catch(e) { console.error("Error parseando etiqueta larga"); }
+            }
 
-<div class="bg-white w-full max-w-xs rounded-3xl max-h-[80vh] flex flex-col p-6 shadow-2xl">
-<h3 class="font-black text-xl mb-4 text-blue-900">Resumen Carga</h3>
+            const res = await fetch(GOOGLE_URL, {
+                method: 'POST',
+                body: JSON.stringify(params)
+            });
+            const data = await res.json();
 
-<div id="listaResumen" class="flex-1 overflow-y-auto space-y-3 text-sm border-y py-4"></div>
+            if(data.success) {
+                if(data.opciones.length === 1) { 
+                    prepararRegistro(data.opciones[0], data.cantidadEtiqueta || null); 
+                } else {
+                    const cont = document.getElementById('contenedorUM');
+                    cont.innerHTML = '';
+                    data.opciones.forEach(op => {
+                        const b = document.createElement('button');
+                        b.className = "w-full p-4 bg-white border border-blue-200 rounded-2xl font-black text-xl text-center";
+                        b.innerText = op.um;
+                        b.onclick = () => prepararRegistro(op, data.cantidadEtiqueta || null);
+                        cont.appendChild(b);
+                    });
+                    document.getElementById('secUM').classList.remove('step-hidden');
+                }
+            } else { 
+                playBeep('err'); 
+                decir(data.msg || "No encontrado");
+                alert(data.msg); 
+            }
+        }
 
-<button onclick="cerrarResumen()"
-class="mt-4 w-full py-3 bg-blue-900 text-white rounded-xl font-bold">
-CERRAR
-</button>
-</div>
+        function prepararRegistro(item, cantSugerida = null) {
+            selectedItem = item;
+            document.getElementById('txtArt').innerText = item.sku;
+            document.getElementById('txtDesc').innerText = `${item.desc} (${item.um})`;
+            document.getElementById('secUM').classList.add('step-hidden');
+            document.getElementById('secCantidad').classList.remove('step-hidden');
+            
+            if(cantSugerida) {
+                document.getElementById('cantInput').value = cantSugerida;
+                decir("Pallet detectado. Cantidad " + cantSugerida);
+            } else {
+                decir("Artículo " + item.sku + ", " + item.um);
+            }
+            document.getElementById('cantInput').focus();
+        }
 
-</div>
+        async function guardar() {
+            const cant = parseInt(document.getElementById('cantInput').value);
+            if(!cant) return;
+            const finalEscaneado = (selectedItem.actual || 0) + cant;
+            
+            if (finalEscaneado > selectedItem.total) {
+                playBeep('err'); 
+                decir("Error. Supera la carga.");
+                return alert("Error: La cantidad supera lo solicitado. Cantidad en carga: " + selectedItem.total);
+            }
+            
+            const res = await fetch(GOOGLE_URL, {
+                method: 'POST',
+                body: JSON.stringify({
+                    action: 'registrarCantidad', 
+                    nroCarga: currentCarga, 
+                    indexFila: selectedItem.index, 
+                    nuevaSuma: finalEscaneado,
+                    nroPallet: nroPalletActual
+                })
+            });
+            const data = await res.json();
+            if(data.success) {
+                playBeep('ok');
+                addHistorial(selectedItem.sku, cant, selectedItem.um, selectedItem.index, finalEscaneado);
+                document.getElementById('secCantidad').classList.add('step-hidden');
+                document.getElementById('barcode').value = '';
+                document.getElementById('barcode').focus();
+                actualizarContadores();
+            }
+        }
 
-<!-- JS queda igual, no tenía problema de espacios -->
-<script>
-/* TU JS ORIGINAL SIN CAMBIOS */
-</script>
+        function addHistorial(sku, c, um, index, totalNuevo) {
+            const list = document.getElementById('historial');
+            const d = document.createElement('div');
+            d.id = `hist-${Date.now()}`;
+            d.className = "bg-white p-3 rounded-xl border border-slate-200 text-sm flex justify-between items-center shadow-sm mb-2";
+            d.innerHTML = `
+                <div><b>${sku}</b> (${um}) - P${nroPalletActual}</div>
+                <div class="flex items-center gap-3">
+                    <div class="font-black text-green-600">+${c}</div>
+                    <button onclick="borrarRegistro('${sku}', ${c}, ${index}, ${totalNuevo}, '${d.id}')" class="text-xs bg-red-100 text-red-600 px-2 py-1 rounded-lg">✕</button>
+                </div>`;
+            list.prepend(d);
+        }
 
+        async function borrarRegistro(sku, cant, index, totalActualEnSheet, divId) {
+            if(!confirm(`¿Borrar el ingreso de ${cant} para ${sku}?`)) return;
+            const nuevaSuma = totalActualEnSheet - cant;
+            const res = await fetch(GOOGLE_URL, {
+                method: 'POST',
+                body: JSON.stringify({
+                    action: 'registrarCantidad', 
+                    nroCarga: currentCarga, 
+                    indexFila: index, 
+                    nuevaSuma: nuevaSuma,
+                    nroPallet: nroPalletActual
+                })
+            });
+            const data = await res.json();
+            if(data.success) {
+                document.getElementById(divId).remove();
+                actualizarContadores();
+                decir("Registro borrado");
+            }
+        }
+
+        async function actualizarContadores() {
+            const res = await fetch(GOOGLE_URL, {
+                method: 'POST',
+                body: JSON.stringify({ action: 'obtenerResumen', nroCarga: currentCarga })
+            });
+            const data = await res.json();
+            if(data.success) {
+                let cT=0, cS=0, uT=0, uS=0;
+                data.resumen.forEach(i => {
+                    if(i.um.includes("CAJA")) { cT += i.total; cS += i.scan; }
+                    else { uT += i.total; uS += i.scan; }
+                });
+                document.getElementById('contadores').innerHTML = `${cS}/${cT} CA<br>${uS}/${uT} UN`;
+            }
+        }
+
+        function cerrarPallet() {
+            nroPalletActual++;
+            document.getElementById('palletDisplay').innerText = `PALLET N° ${nroPalletActual}`;
+            decir("Pallet " + nroPalletActual);
+            playBeep('ok');
+        }
+
+        async function abrirResumen() {
+            document.getElementById('modalResumen').classList.remove('step-hidden');
+            const res = await fetch(GOOGLE_URL, {
+                method: 'POST', 
+                body: JSON.stringify({action:'obtenerResumen', nroCarga: currentCarga})
+            });
+            const data = await res.json();
+            const list = document.getElementById('listaResumen');
+            list.innerHTML = '';
+            data.resumen.forEach(i => {
+                const d = document.createElement('div');
+                const esCorrecto = i.scan === i.total;
+                const bgColor = esCorrecto ? 'bg-green-100 border-green-300' : 'bg-red-100 border-red-300';
+                const textColor = esCorrecto ? 'text-green-800' : 'text-red-800';
+                d.className = `p-3 rounded-xl border mb-2 text-xs shadow-sm ${bgColor} ${textColor}`;
+                d.innerHTML = `<div class="flex justify-between items-center mb-1"><b class="text-sm">${i.sku}</b><span class="font-black uppercase">${esCorrecto ? '✓ OK' : '⚠ Dif'}</span></div><div>${i.um}: <b>${i.scan}</b> de ${i.total}</div>`;
+                list.appendChild(d);
+            });
+        }
+
+        function cerrarResumen() { document.getElementById('modalResumen').classList.add('step-hidden'); }
+
+        // --- FINALIZACIÓN Y PDF ---
+        async function confirmarFinalizar() {
+            const res = await fetch(GOOGLE_URL, {
+                method: 'POST',
+                body: JSON.stringify({ action: 'obtenerResumen', nroCarga: currentCarga })
+            });
+            const data = await res.json();
+            
+            const diferencias = data.resumen.filter(i => i.scan !== i.total).length;
+            if(diferencias > 0) {
+                decir("Atención. Tenés " + diferencias + " diferencias.");
+                if(!confirm(`¡CUIDADO! Hay ${diferencias} artículos con diferencias.\n\n¿Deseas finalizar y subir reporte a Drive?`)) return;
+            } else {
+                if(!confirm("¿Finalizar carga y generar PDF en Drive?")) return;
+            }
+
+            document.getElementById('loader').style.display = 'flex';
+
+            try {
+                const doc = generarPDF(data.resumen);
+                const pdfBase64 = doc.output('datauristring').split(',')[1];
+
+                const driveResp = await fetch(GOOGLE_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ 
+                        action: 'guardarPDF', 
+                        nroCarga: currentCarga, 
+                        base64: pdfBase64, 
+                        nombreArchivo: `Reporte_Carga_${currentCarga}_${nombreOp}.pdf` 
+                    })
+                });
+                
+                doc.save(`Reporte_Carga_${currentCarga}.pdf`);
+
+                await fetch(GOOGLE_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ action: 'finalizarCarga', nroCarga: currentCarga })
+                });
+
+                alert("Proceso completado: PDF guardado en Drive y carga finalizada.");
+                
+                bloqueandoSalida = false; // LIBERAMOS EL BLOQUEO PARA PODER RECARGAR
+                location.reload(); 
+
+            } catch (err) {
+                alert("Error en el proceso final: " + err.message);
+            } finally {
+                document.getElementById('loader').style.display = 'none';
+            }
+        }
+
+function generarPDF(datos) {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(22);
+            doc.text("REPORTE DE CONTROL DE CARGA", 14, 20);
+            
+            doc.setFontSize(12);
+            doc.text("Verificador: ", 14, 32);
+            doc.setFont("helvetica", "normal");
+            doc.text(nombreOp, 40, 32);
+            
+            doc.setFont("helvetica", "bold");
+            doc.text("Carga Nro: ", 14, 40);
+            doc.text(String(currentCarga), 40, 40);
+            
+            const f = new Date();
+            const fStr = `${f.toLocaleDateString()} ${f.getHours().toString().padStart(2,'0')}:${f.getMinutes().toString().padStart(2,'0')}`;
+            doc.setFontSize(10);
+            doc.setFont("helvetica", "normal");
+            doc.text(`Fecha Impresión: ${fStr}`, 14, 48);
+
+            let tC = 0, tU = 0, totalCajasPicking = 0;
+            datos.forEach(i => {
+                if(i.um.includes("CAJA")) tC += i.scan;
+                else tU += i.scan;
+                
+                if((i.pmph || "").toLowerCase().trim() === "picking" && i.um.includes("CAJA")) {
+                    totalCajasPicking += i.scan;
+                }
+            });
+
+            doc.setFont("helvetica", "bold");
+            doc.text(`TOTAL CONTROLADO -> CAJAS: ${tC} | UNIDADES: ${tU}`, 14, 56);
+            doc.setTextColor(200, 0, 0);
+            doc.text(`TOTAL CAJAS PICKING: ${totalCajasPicking}`, 14, 63);
+            doc.setTextColor(0, 0, 0);
+            
+            let y = 72;
+            doc.setFontSize(9);
+            doc.text("SKU", 14, y);
+            doc.text("DESCRIPCION", 35, y);
+            doc.text("UM", 90, y);
+            doc.text("TOTAL", 110, y);
+            doc.text("CONT", 130, y);
+            doc.text("CHECK", 155, y);
+            doc.text("PALLET N°", 178, y); 
+            
+            doc.setLineWidth(0.5);
+            doc.line(14, y + 2, 200, y + 2);
+            y += 10;
+            
+            datos.forEach(item => {
+                if(y > 275) { doc.addPage(); y = 20; }
+                const hayDiferencia = item.scan !== item.total;
+                doc.setFont("helvetica", hayDiferencia ? "bold" : "normal");
+                doc.text(String(item.sku), 14, y);
+                let desc = item.desc || "";
+                if(desc.length > 25) desc = desc.substring(0, 23) + "..";
+                doc.text(desc, 35, y);
+                doc.text(String(item.um), 90, y);
+                doc.text(String(item.total), 110, y);
+                doc.text(String(item.scan), 130, y);
+                doc.text(hayDiferencia ? "DIF" : "OK", 155, y);
+                doc.text(String(item.pallet || "-"), 178, y);
+                y += 8;
+            });
+
+            const resumenPallets = {};
+            datos.forEach(item => {
+                if ((item.pmph || "").toLowerCase().trim() === "picking") {
+                    let p = String(item.pallet || "-");
+                    if(p !== "-" && p !== "") {
+                        if (!resumenPallets[p]) resumenPallets[p] = { CA: 0, UN: 0 };
+                        if (item.um.includes("CAJA")) resumenPallets[p].CA += item.scan;
+                        else resumenPallets[p].UN += item.scan;
+                    }
+                }
+            });
+
+            const keys = Object.keys(resumenPallets).sort((a,b)=> parseInt(a)-parseInt(b));
+            if(keys.length > 0) {
+                y += 5;
+                if(y > 250) { doc.addPage(); y = 20; }
+                doc.setFont("helvetica", "bold");
+                doc.text("RESUMEN DE PALLETS (PICKING):", 14, y);
+                y += 7;
+                doc.setFont("helvetica", "normal");
+                keys.forEach(p => {
+                    let txt = `Pallet N° ${p} = `;
+                    let partes = [];
+                    if(resumenPallets[p].CA > 0) partes.push(`${resumenPallets[p].CA} CA`);
+                    if(resumenPallets[p].UN > 0) partes.push(`${resumenPallets[p].UN} UN`);
+                    doc.text(txt + partes.join(" / "), 14, y);
+                    y += 6;
+                });
+            }
+
+            // --- NUEVA LÓGICA DE PIE DE PÁGINA ---
+            const pageCount = doc.internal.getNumberOfPages(); // Obtiene total de páginas
+            for (let i = 1; i <= pageCount; i++) {
+                doc.setPage(i); // Se mueve a la página i
+                doc.setFontSize(8); // Fuente más pequeña
+                doc.setTextColor(150); // Color grisáceo para que sea discreto
+                doc.setFont("helvetica", "normal");
+                
+                // Texto izquierda: Leyenda
+                doc.text("Desarrollo creado por M2 Consultoria Digital", 14, 287);
+                
+                // Texto derecha: Numeración x/y
+                doc.text(`${i} / ${pageCount}`, 200, 287, { align: "right" });
+            }
+
+            return doc;
+        }
+    </script>
 </body>
 </html>
