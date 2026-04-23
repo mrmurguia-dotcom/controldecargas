@@ -242,11 +242,18 @@
         }
 
         async function buscarArticulo() {
-            const rawValue = document.getElementById('barcode').value.trim();
+            // 1. Limpiamos el valor (quitamos espacios y caracteres raros del scanner)
+            let rawValue = document.getElementById('barcode').value.trim();
             if(!rawValue) return;
 
-            let params = { action: 'buscarArticulo', nroCarga: currentCarga, barcode: rawValue };
+            // Prioridad: Si es un código largo (como el 779...), nos aseguramos de que se envíe limpio
+            let params = { 
+                action: 'buscarArticulo', 
+                nroCarga: currentCarga, 
+                barcode: rawValue 
+            };
 
+            // 2. Lógica para etiquetas de Pallet (solo si es muy largo)
             if (rawValue.length >= 30) {
                 try {
                     const itm = parseInt(rawValue.substring(1, 9), 10).toString();
@@ -260,31 +267,36 @@
                 } catch(e) { console.error("Error parseando etiqueta larga"); }
             }
 
-            const res = await fetch(GOOGLE_URL, {
-                method: 'POST',
-                body: JSON.stringify(params)
-            });
-            const data = await res.json();
+            // 3. Llamada al servidor
+            try {
+                const res = await fetch(GOOGLE_URL, {
+                    method: 'POST',
+                    body: JSON.stringify(params)
+                });
+                const data = await res.json();
 
-            if(data.success) {
-                if(data.opciones.length === 1) { 
-                    prepararRegistro(data.opciones[0], data.cantidadEtiqueta || null); 
-                } else {
-                    const cont = document.getElementById('contenedorUM');
-                    cont.innerHTML = '';
-                    data.opciones.forEach(op => {
-                        const b = document.createElement('button');
-                        b.className = "w-full p-4 bg-white border border-blue-200 rounded-2xl font-black text-xl text-center";
-                        b.innerText = op.um;
-                        b.onclick = () => prepararRegistro(op, data.cantidadEtiqueta || null);
-                        cont.appendChild(b);
-                    });
-                    document.getElementById('secUM').classList.remove('step-hidden');
+                if(data.success) {
+                    if(data.opciones.length === 1) { 
+                        prepararRegistro(data.opciones[0], data.cantidadEtiqueta || null); 
+                    } else {
+                        const cont = document.getElementById('contenedorUM');
+                        cont.innerHTML = '';
+                        data.opciones.forEach(op => {
+                            const b = document.createElement('button');
+                            b.className = "w-full p-4 bg-white border border-blue-200 rounded-2xl font-black text-xl text-center";
+                            b.innerText = op.um;
+                            b.onclick = () => prepararRegistro(op, data.cantidadEtiqueta || null);
+                            cont.appendChild(b);
+                        });
+                        document.getElementById('secUM').classList.remove('step-hidden');
+                    }
+                } else { 
+                    playBeep('err'); 
+                    decir(data.msg || "No encontrado");
+                    alert(data.msg); 
                 }
-            } else { 
-                playBeep('err'); 
-                decir(data.msg || "No encontrado");
-                alert(data.msg); 
+            } catch (error) {
+                alert("Error de conexión al buscar artículo.");
             }
         }
 
