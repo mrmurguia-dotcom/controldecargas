@@ -10,7 +10,7 @@
     <style>
         .step-hidden { display: none !important; }
         #modalResumen { backdrop-filter: blur(4px); }
-        .mic-active { animation: pulse 1.5s infinite; background-color: #ef4444 !important; }
+        .mic-active { animation: pulse 1.5s infinite; background-color: #ef4444 !important; color: white !important; }
         @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
         #loader { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 200; align-items: center; justify-content: center; color: white; flex-direction: column; }
     </style>
@@ -85,6 +85,7 @@
                     <div>
                         <h2 id="txtArt" class="text-2xl font-black text-slate-900"></h2>
                         <p id="txtDesc" class="text-sm text-slate-500"></p>
+                        <p id="progresoArt" class="text-[11px] font-bold text-blue-600 mt-1 uppercase"></p>
                     </div>
                     <button onclick="cerrarPallet()" class="bg-orange-500 text-white px-3 py-2 rounded-xl text-[10px] font-bold">CAMBIAR PALLET</button>
                 </div>
@@ -129,6 +130,8 @@
         const recognition = (window.SpeechRecognition || window.webkitSpeechRecognition) ? new (window.SpeechRecognition || window.webkitSpeechRecognition)() : null;
         if(recognition) {
             recognition.lang = 'es-AR';
+            recognition.continuous = false;
+            
             recognition.onresult = (event) => {
                 const texto = event.results[0][0].transcript;
                 const numero = texto.match(/\d+/);
@@ -137,8 +140,21 @@
                     decir("Registrando " + numero[0]);
                     guardar();
                 }
+            };
+
+            recognition.onend = () => {
                 document.getElementById('btnVoz').classList.remove('mic-active');
             };
+
+            recognition.onerror = () => {
+                document.getElementById('btnVoz').classList.remove('mic-active');
+            };
+        }
+
+        function activarVoz() {
+            if(!recognition) return alert("Voz no compatible");
+            document.getElementById('btnVoz').classList.add('mic-active');
+            recognition.start();
         }
 
         function decir(t) { 
@@ -148,7 +164,6 @@
             window.speechSynthesis.speak(u); 
         }
 
-        // --- CÁMARA (Prioridad) ---
         function toggleCamara() {
             const readerDiv = document.getElementById('reader');
             if (readerDiv.classList.contains('hidden')) {
@@ -157,7 +172,6 @@
                 html5QrCode.start({ facingMode: "environment" }, { fps: 15, qrbox: 250 }, 
                     (decodedText) => {
                         document.getElementById('barcode').value = decodedText;
-                        // Al detectar, dispara la búsqueda automáticamente
                         buscarArticulo();
                         pararCamara();
                     }
@@ -173,17 +187,14 @@
             }
         }
 
-        // --- LÓGICA DE NEGOCIO ---
         async function buscarArticulo() {
             const rawValue = document.getElementById('barcode').value.trim();
             if(!rawValue) return;
 
-            // Mostramos un pequeño feedback visual
             document.getElementById('barcode').disabled = true;
 
             let params = { action: 'buscarArticulo', nroCarga: currentCarga, barcode: rawValue };
 
-            // Caso de etiquetas largas (Pallets completos)
             if (rawValue.length >= 30) {
                 try {
                     const itm = parseInt(rawValue.substring(1, 9), 10).toString();
@@ -229,51 +240,63 @@
             selectedItem = item;
             document.getElementById('txtArt').innerText = item.sku;
             document.getElementById('txtDesc').innerText = `${item.desc} (${item.um})`;
+            
+            // Actualizamos visualización de progreso
+            document.getElementById('progresoArt').innerText = `Llevas: ${item.actual || 0} / Total: ${item.total}`;
+            
             document.getElementById('secUM').classList.add('step-hidden');
             document.getElementById('secCantidad').classList.remove('step-hidden');
             
+            const inputCant = document.getElementById('cantInput');
             if(cantSugerida) {
-                document.getElementById('cantInput').value = cantSugerida;
+                inputCant.value = cantSugerida;
                 decir("Pallet detectado. Cantidad " + cantSugerida);
-                document.getElementById('cantInput').focus();
+                inputCant.focus();
             } else {
                 decir("Artículo " + item.sku);
-                document.getElementById('cantInput').value = "";
-                document.getElementById('cantInput').focus();
+                inputCant.value = ""; // Siempre en blanco para nuevos cambios
+                inputCant.focus();
             }
         }
 
         async function guardar() {
-            const cant = parseInt(document.getElementById('cantInput').value);
-            if(!cant) return;
-            const finalEscaneado = (selectedItem.actual || 0) + cant;
+            const cantInput = document.getElementById('cantInput');
+            const cant = parseInt(cantInput.value);
+            if(!cant || cant <= 0) return;
+            
+            const actualRegistrado = selectedItem.actual || 0;
+            const finalEscaneado = actualRegistrado + cant;
             
             if (finalEscaneado > selectedItem.total) {
                 decir("Error. Supera la carga.");
-                return alert("Error: Supera lo solicitado.");
+                // Actualizamos progreso para que el usuario vea por qué falló
+                document.getElementById('progresoArt').innerText = `Llevas: ${actualRegistrado} / Total: ${selectedItem.total}`;
+                return alert(`Error: Supera lo solicitado.\nYa tienes ${actualRegistrado} y quieres sumar ${cant}.\nEl total permitido es ${selectedItem.total}.`);
             }
             
-            const res = await fetch(GOOGLE_URL, {
-                method: 'POST',
-                body: JSON.stringify({
-                    action: 'registrarCantidad', 
-                    nroCarga: currentCarga, 
-                    indexFila: selectedItem.index, 
-                    nuevaSuma: finalEscaneado,
-                    nroPallet: nroPalletActual
-                })
-            });
-            const data = await res.json();
-            if(data.success) {
-                addHistorial(selectedItem.sku, cant, selectedItem.um, selectedItem.index, finalEscaneado);
-                document.getElementById('secCantidad').classList.add('step-hidden');
-                document.getElementById('barcode').value = '';
-                document.getElementById('barcode').focus();
-                actualizarContadores();
-            }
+            try {
+                const res = await fetch(GOOGLE_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        action: 'registrarCantidad', 
+                        nroCarga: currentCarga, 
+                        indexFila: selectedItem.index, 
+                        nuevaSuma: finalEscaneado,
+                        nroPallet: nroPalletActual
+                    })
+                });
+                const data = await res.json();
+                if(data.success) {
+                    addHistorial(selectedItem.sku, cant, selectedItem.um);
+                    document.getElementById('secCantidad').classList.add('step-hidden');
+                    document.getElementById('barcode').value = '';
+                    cantInput.value = ''; // Limpieza obligatoria
+                    document.getElementById('barcode').focus();
+                    actualizarContadores();
+                }
+            } catch(e) { alert("Error al guardar"); }
         }
 
-        // --- LAS DEMÁS FUNCIONES (PDF, Historial, etc.) SIGUEN IGUAL ---
         function verificarOperador() {
             const val = document.getElementById('operadorSelect').value;
             if(val === "Otro") document.getElementById('operadorOtro').classList.remove('step-hidden');
@@ -303,10 +326,9 @@
             finally { document.getElementById('btnIniciar').innerText = "OK"; }
         }
 
-        function addHistorial(sku, c, um, index, totalNuevo) {
+        function addHistorial(sku, c, um) {
             const list = document.getElementById('historial');
             const d = document.createElement('div');
-            d.id = `hist-${Date.now()}`;
             d.className = "bg-white p-3 rounded-xl border border-slate-200 text-sm flex justify-between items-center shadow-sm mb-2";
             d.innerHTML = `<div><b>${sku}</b> (${um})</div><div class="font-black text-green-600">+${c}</div>`;
             list.prepend(d);
@@ -357,7 +379,6 @@
         async function confirmarFinalizar() {
             if(!confirm("¿Finalizar y guardar en Drive?")) return;
             document.getElementById('loader').style.display = 'flex';
-            // Aquí iría tu lógica de PDF...
             alert("Carga Finalizada.");
             location.reload();
         }
