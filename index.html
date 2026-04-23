@@ -242,18 +242,15 @@
         }
 
         async function buscarArticulo() {
-            // 1. Limpiamos el valor (quitamos espacios y caracteres raros del scanner)
             let rawValue = document.getElementById('barcode').value.trim();
             if(!rawValue) return;
 
-            // Prioridad: Si es un código largo (como el 779...), nos aseguramos de que se envíe limpio
             let params = { 
                 action: 'buscarArticulo', 
                 nroCarga: currentCarga, 
                 barcode: rawValue 
             };
 
-            // 2. Lógica para etiquetas de Pallet (solo si es muy largo)
             if (rawValue.length >= 30) {
                 try {
                     const itm = parseInt(rawValue.substring(1, 9), 10).toString();
@@ -267,7 +264,6 @@
                 } catch(e) { console.error("Error parseando etiqueta larga"); }
             }
 
-            // 3. Llamada al servidor
             try {
                 const res = await fetch(GOOGLE_URL, {
                     method: 'POST',
@@ -276,20 +272,40 @@
                 const data = await res.json();
 
                 if(data.success) {
-                    if(data.opciones.length === 1) { 
-                        prepararRegistro(data.opciones[0], data.cantidadEtiqueta || null); 
+                    // --- LÓGICA FILTRADO DE UNIDADES DE MEDIDA REPETIDAS ---
+                    
+                    // 1. Agrupamos por UM única, priorizando la fila que no esté completa
+                    const opcionesUnicas = [];
+                    const umsProcesadas = new Set();
+
+                    data.opciones.forEach(op => {
+                        if (!umsProcesadas.has(op.um)) {
+                            // Buscamos si hay alguna fila de esta misma UM que todavía falte controlar
+                            const filaPendiente = data.opciones.find(f => f.um === op.um && f.scan < f.total);
+                            // Si existe una pendiente, usamos esa, sino la primera que aparezca
+                            opcionesUnicas.push(filaPendiente || op);
+                            umsProcesadas.add(op.um);
+                        }
+                    });
+
+                    // 2. Decidimos si mostrar botones o pasar directo
+                    if(opcionesUnicas.length === 1) { 
+                        // Si después de filtrar solo queda una UM (ej: todas eran "CAJA"), entra directo
+                        prepararRegistro(opcionesUnicas[0], data.cantidadEtiqueta || null); 
                     } else {
+                        // Si hay UMs distintas (ej: "CAJA" y "UNIDAD"), mostramos los botones
                         const cont = document.getElementById('contenedorUM');
                         cont.innerHTML = '';
-                        data.opciones.forEach(op => {
+                        opcionesUnicas.forEach(op => {
                             const b = document.createElement('button');
-                            b.className = "w-full p-4 bg-white border border-blue-200 rounded-2xl font-black text-xl text-center";
+                            b.className = "w-full p-4 bg-white border border-blue-200 rounded-2xl font-black text-xl text-center shadow-sm active:bg-blue-100";
                             b.innerText = op.um;
                             b.onclick = () => prepararRegistro(op, data.cantidadEtiqueta || null);
                             cont.appendChild(b);
                         });
                         document.getElementById('secUM').classList.remove('step-hidden');
                     }
+                    // -------------------------------------------------------
                 } else { 
                     playBeep('err'); 
                     decir(data.msg || "No encontrado");
@@ -299,7 +315,6 @@
                 alert("Error de conexión al buscar artículo.");
             }
         }
-
         function prepararRegistro(item, cantSugerida = null) {
             selectedItem = item;
             document.getElementById('txtArt').innerText = item.sku;
