@@ -356,8 +356,12 @@
             if(data.success) {
                 playBeep('ok');
                 addHistorial(selectedItem.sku, cant, selectedItem.um, selectedItem.index, finalEscaneado);
+                
+                // --- LAS MODIFICACIONES ESTÁN AQUÍ ---
                 document.getElementById('secCantidad').classList.add('step-hidden');
-                document.getElementById('barcode').value = '';
+                document.getElementById('barcode').value = '';   // Limpia el buscador
+                document.getElementById('cantInput').value = ''; // <-- AGREGÁ ESTA LÍNEA (Limpia la cantidad)
+                
                 document.getElementById('barcode').focus();
                 actualizarContadores();
             }
