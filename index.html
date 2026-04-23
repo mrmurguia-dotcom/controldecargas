@@ -467,7 +467,7 @@
             }
         }
 
-        function generarPDF(datos) {
+function generarPDF(datos) {
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF();
             
@@ -564,6 +564,21 @@
                     doc.text(txt + partes.join(" / "), 14, y);
                     y += 6;
                 });
+            }
+
+            // --- NUEVA LÓGICA DE PIE DE PÁGINA ---
+            const pageCount = doc.internal.getNumberOfPages(); // Obtiene total de páginas
+            for (let i = 1; i <= pageCount; i++) {
+                doc.setPage(i); // Se mueve a la página i
+                doc.setFontSize(8); // Fuente más pequeña
+                doc.setTextColor(150); // Color grisáceo para que sea discreto
+                doc.setFont("helvetica", "normal");
+                
+                // Texto izquierda: Leyenda
+                doc.text("Desarrollo creado por M2 Consultoria Digital", 14, 287);
+                
+                // Texto derecha: Numeración x/y
+                doc.text(`${i} / ${pageCount}`, 200, 287, { align: "right" });
             }
 
             return doc;
