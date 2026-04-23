@@ -122,6 +122,29 @@
 
     <script>
         const GOOGLE_URL = "https://script.google.com/macros/s/AKfycbzKjFlPsGUOP1QgLr2FkFvodke-czEuXRmhoLyYmj7a2bgp4ZGEiHNSek6EUhIteEk/exec"; 
+        // Función para los sonidos de éxito/error
+        function playBeep(tipo) {
+            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const oscillator = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+
+            oscillator.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+
+            if (tipo === 'ok') {
+                oscillator.frequency.setValueAtTime(880, audioCtx.currentTime); // Tono agudo
+                oscillator.type = 'sine';
+                gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                oscillator.start();
+                oscillator.stop(audioCtx.currentTime + 0.1);
+            } else {
+                oscillator.frequency.setValueAtTime(220, audioCtx.currentTime); // Tono grave
+                oscillator.type = 'square';
+                gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                oscillator.start();
+                oscillator.stop(audioCtx.currentTime + 0.3);
+            }
+        }
         
         let currentCarga = "";
         let nombreOp = "";
@@ -342,45 +365,45 @@
         }
 
         async function guardar() {
-            const cant = parseInt(document.getElementById('cantInput').value);
-            if(!cant) return;
-            const finalEscaneado = (selectedItem.actual || 0) + cant;
-            
-            if (finalEscaneado > selectedItem.total) {
-                // FORZAR APAGADO DEL MICRÓFONO
-                if(recognition) recognition.stop();
-                document.getElementById('btnVoz').classList.remove('mic-active');
-
-                playBeep('err'); 
-                decir("Error. Supera la carga.");
-                return alert("Error: La cantidad supera lo solicitado. Cantidad en carga: " + selectedItem.total);
-            }
-            
-            const res = await fetch(GOOGLE_URL, {
-                method: 'POST',
-                body: JSON.stringify({
-                    action: 'registrarCantidad', 
-                    nroCarga: currentCarga, 
-                    indexFila: selectedItem.index, 
-                    nuevaSuma: finalEscaneado,
-                    nroPallet: nroPalletActual
-                })
-            });
-            const data = await res.json();
-            if(data.success) {
-                playBeep('ok');
-                addHistorial(selectedItem.sku, cant, selectedItem.um, selectedItem.index, finalEscaneado);
-                document.getElementById('btnVoz').classList.add('step-hidden');
-                
-                // --- LAS MODIFICACIONES ESTÁN AQUÍ ---
-                document.getElementById('secCantidad').classList.add('step-hidden');
-                document.getElementById('barcode').value = '';   // Limpia el buscador
-                document.getElementById('cantInput').value = ''; // <-- AGREGÁ ESTA LÍNEA (Limpia la cantidad)
-                
-                document.getElementById('barcode').focus();
-                actualizarContadores();
-            }
-        }
+            const cant = parseInt(document.getElementById('cantInput').value);
+            if(!cant) return;
+            const finalEscaneado = (selectedItem.actual || 0) + cant;
+            
+            if (finalEscaneado > selectedItem.total) {
+                if(recognition) recognition.stop();
+                document.getElementById('btnVoz').classList.remove('mic-active');
+                playBeep('err'); 
+                decir("Error. Supera la carga.");
+                return alert("Error: La cantidad supera lo solicitado. Cantidad en carga: " + selectedItem.total);
+            }
+            
+            try {
+                const res = await fetch(GOOGLE_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        action: 'registrarCantidad', 
+                        nroCarga: currentCarga, 
+                        indexFila: selectedItem.index, 
+                        nuevaSuma: finalEscaneado,
+                        nroPallet: nroPalletActual
+                    })
+                });
+                const data = await res.json();
+                if(data.success) {
+                    playBeep('ok');
+                    addHistorial(selectedItem.sku, cant, selectedItem.um, selectedItem.index, finalEscaneado);
+                    document.getElementById('btnVoz').classList.add('step-hidden');
+                    document.getElementById('secCantidad').classList.add('step-hidden');
+                    document.getElementById('barcode').value = '';   
+                    document.getElementById('cantInput').value = ''; 
+                    document.getElementById('barcode').focus();
+                    actualizarContadores();
+                }
+            } catch (error) {
+                alert("Error de conexión al guardar. Revisa tu internet e intenta de nuevo.");
+                playBeep('err');
+            }
+        }
 
         function addHistorial(sku, c, um, index, totalNuevo) {
             const list = document.getElementById('historial');
@@ -397,26 +420,30 @@
         }
 
         async function borrarRegistro(sku, cant, index, totalActualEnSheet, divId) {
-            if(!confirm(`¿Borrar el ingreso de ${cant} para ${sku}?`)) return;
-            const nuevaSuma = totalActualEnSheet - cant;
-            const res = await fetch(GOOGLE_URL, {
-                method: 'POST',
-                body: JSON.stringify({
-                    action: 'registrarCantidad', 
-                    nroCarga: currentCarga, 
-                    indexFila: index, 
-                    nuevaSuma: nuevaSuma,
-                    nroPallet: nroPalletActual
-                })
-            });
-            const data = await res.json();
-            if(data.success) {
-                document.getElementById(divId).remove();
-                actualizarContadores();
-                decir("Registro borrado");
-            }
-        }
-
+            if(!confirm(`¿Borrar el ingreso de ${cant} para ${sku}?`)) return;
+            const nuevaSuma = totalActualEnSheet - cant;
+            
+            try {
+                const res = await fetch(GOOGLE_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        action: 'registrarCantidad', 
+                        nroCarga: currentCarga, 
+                        indexFila: index, 
+                        nuevaSuma: nuevaSuma,
+                        nroPallet: nroPalletActual
+                    })
+                });
+                const data = await res.json();
+                if(data.success) {
+                    document.getElementById(divId).remove();
+                    actualizarContadores();
+                    decir("Registro borrado");
+                }
+            } catch (error) {
+                alert("Error de conexión al intentar borrar. Revisa tu internet.");
+            }
+        }
         async function actualizarContadores() {
             const res = await fetch(GOOGLE_URL, {
                 method: 'POST',
@@ -507,11 +534,14 @@
                 location.reload(); 
 
             } catch (err) {
-                alert("Error en el proceso final: " + err.message);
-            } finally {
-                document.getElementById('loader').style.display = 'none';
-            }
-        }
+        console.error(err);
+        alert("Error en el proceso final: " + err.message);
+    } finally {
+        // AQUÍ PEGAS LO DE LA IMAGEN
+        document.getElementById('loader').style.display = 'none';
+        // Esto asegura que el circulito de carga se quite siempre, 
+        // aunque haya habido un error.
+    }
 
 function generarPDF(datos) {
             const { jsPDF } = window.jspdf;
@@ -611,22 +641,19 @@ function generarPDF(datos) {
                     y += 6;
                 });
             }
-
-            // --- NUEVA LÓGICA DE PIE DE PÁGINA ---
-            const pageCount = doc.internal.getNumberOfPages(); // Obtiene total de páginas
+          // --- CIERRE DE LÓGICA DE PIE DE PÁGINA ---
+            const pageCount = doc.internal.getNumberOfPages();
             for (let i = 1; i <= pageCount; i++) {
-                doc.setPage(i); // Se mueve a la página i
-                doc.setFontSize(8); // Fuente más pequeña
-                doc.setTextColor(150); // Color grisáceo para que sea discreto
+                doc.setPage(i);
+                doc.setFontSize(8);
+                doc.setTextColor(150);
                 doc.setFont("helvetica", "normal");
                 
                 // Texto izquierda: Leyenda
-                doc.text("Desarrollo creado por M2 Consultoria Digital", 14, 287);
-                
-                // Texto derecha: Numeración x/y
-                doc.text(`${i} / ${pageCount}`, 200, 287, { align: "right" });
+                doc.text("Desarrollo creado por M2 Consultoría Digital", 14, 290);
+                // Texto derecha: Numeración
+                doc.text(`Página ${i} de ${pageCount}`, 195, 290, { align: "right" });
             }
-
             return doc;
         }
     </script>
