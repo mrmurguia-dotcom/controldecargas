@@ -646,8 +646,8 @@
             doc.text("UM", 90, y);
             doc.text("TOTAL", 110, y);
             doc.text("CONT", 130, y);
-            doc.text("CHECK", 155, y);
-            doc.text("PALLET N°", 178, y);
+            doc.text("PALLET N°", 155, y);
+            doc.text("CHECK", 178, y);
 
             doc.setLineWidth(0.5);
             doc.line(14, y + 2, 200, y + 2);
@@ -664,8 +664,14 @@
                 doc.text(String(item.um), 90, y);
                 doc.text(String(item.total), 110, y);
                 doc.text(String(item.scan), 130, y);
-                doc.text(hayDiferencia ? "DIF" : "OK", 155, y);
-                doc.text(String(item.pallet || "-"), 178, y);
+
+                // Si es "pallet completo", no mostrar número de pallet
+                const mostrarPallet = (item.palletType || "").toLowerCase().trim() !== "pallet completo"
+                    ? String(item.pallet || "-")
+                    : "";
+                doc.text(mostrarPallet, 155, y);
+
+                doc.text(hayDiferencia ? "DIF" : "OK", 178, y);
                 y += 8;
             });
 
