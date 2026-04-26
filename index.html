@@ -428,7 +428,7 @@
             } else {
                 decir("Artículo " + item.sku + ", " + item.um);
             }
-            document.getElementById('cantInput').focus();
+            // Línea eliminada para evitar que el teclado se abra solo
         }
 
         async function guardar() {
@@ -542,7 +542,19 @@
                 const bgColor = esCorrecto ? 'bg-green-100 border-green-300' : 'bg-red-100 border-red-300';
                 const textColor = esCorrecto ? 'text-green-800' : 'text-red-800';
                 d.className = `p-3 rounded-xl border mb-2 text-xs shadow-sm ${bgColor} ${textColor}`;
-                d.innerHTML = `<div class="flex justify-between items-center mb-1"><b class="text-sm">${i.sku}</b><span class="font-black uppercase">${esCorrecto ? '✓ OK' : '⚠ Dif'}</span></div><div>${i.um}: <b>${i.scan}</b> de ${i.total}</div>`;
+                
+                // Reemplaza la línea de d.innerHTML por este bloque:
+                d.innerHTML = `
+                    <div class="flex justify-between items-start mb-1 gap-2">
+                        <div>
+                            <b class="text-sm block">${i.sku}</b>
+                            <span class="text-[10px] opacity-80 leading-tight block">${i.desc || 'Sin descripción'}</span>
+                        </div>
+                        <span class="font-black uppercase whitespace-nowrap mt-0.5">${esCorrecto ? '✓ OK' : '⚠ Dif'}</span>
+                    </div>
+                    <div class="mt-1">${i.um}: <b>${i.scan}</b> de ${i.total}</div>
+                `;
+                
                 list.appendChild(d);
             });
         }
