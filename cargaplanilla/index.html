@@ -113,10 +113,12 @@
         }
     });
 
-    // Determinar la cancha según la ubicación
+    // Determinar la cancha según la ubicación (removiendo puntos)
     function calcularCancha(ubicacion) {
         if (!ubicacion) return "";
-        let u = ubicacion.trim().toUpperCase();
+        
+        // Quitamos los puntos de la ubicación (ej: 10.0B.001.0 -> 100B0010)
+        let u = ubicacion.replace(/\./g, '').trim().toUpperCase();
         
         if (u.startsWith("100")) return "DEPO";
         if (u.startsWith("200M") || u.startsWith("200L")) return "CAVA";
@@ -279,7 +281,6 @@
         
         let textoCopiar = ""; 
         
-        // Corregido: Se omiten los encabezados Y TAMBIÉN se omite la columna 'Cancha' al copiar
         datosFinales.forEach(f => {
             textoCopiar += `${f["Carga"]}\t${f["ART"]}\t${f["Descripción"]}\t${f["PM/PH"]}\t${f["Desc UM"]}\t${f["Cantidad"]}\n`;
         });
@@ -294,7 +295,6 @@
     function exportarExcel() {
         if(datosFinales.length === 0) return;
 
-        // Se exporta el objeto completo que sí incluye el campo "Cancha"
         const worksheet = XLSX.utils.json_to_sheet(datosFinales);
         
         worksheet['!cols'] = [
