@@ -5,7 +5,7 @@
     <title>Extracción JDE Unificada - M2 Consultora</title>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
     <style>
-        :root { --primary: #2c3e50; --success: #27ae60; --info: #2980b9; --warning: #e67e22; --purple: #8e44ad; }
+        :root { --primary: #2c3e50; --success: #27ae60; --info: #2980b9; --warning: #e67e22; --purple: #8e44ad; --dark-purple: #732d91; }
         body { font-family: 'Segoe UI', sans-serif; background: #f4f7f6; padding: 20px; }
         .container { max-width: 1100px; margin: auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
         .header-title { text-align: center; color: var(--primary); margin-top: 0; }
@@ -20,13 +20,14 @@
         .btn:hover { opacity: 0.9; }
         .btn-process { background: var(--success); width: 100%; font-size: 1.1em; padding: 15px; }
         .btn-copy { background: var(--warning); color: #fff; }
+        .btn-copy-all { background: var(--purple); color: #fff; }
         .btn-export { background: var(--info); }
         
         .resumen-totales { display: none; justify-content: space-around; background: #ebf2f7; padding: 15px; border-radius: 5px; margin-bottom: 15px; border: 1px solid #d1d9e0; font-size: 1.2em; font-weight: bold; }
         .total-ca { color: var(--info); }
         .total-un { color: var(--purple); }
 
-        .action-bar { display: none; justify-content: flex-end; gap: 10px; margin-bottom: 10px; }
+        .action-bar { display: none; justify-content: flex-end; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
         
         .table-container { overflow-x: auto; max-height: 500px; overflow-y: auto; border: 1px solid #ddd; display: none; }
         table { width: 100%; border-collapse: collapse; white-space: nowrap; }
@@ -64,6 +65,7 @@
 
     <div class="action-bar" id="actionBar">
         <button class="btn btn-copy" onclick="copiarAlPortapapeles()">📋 COPIAR PARA EXCEL</button>
+        <button class="btn btn-copy-all" onclick="copiarConUbicacion()">📋 COPIAR C/ UBICACION</button>
         <button class="btn btn-export" onclick="exportarExcel()">💾 DESCARGAR .XLSX</button>
     </div>
 
@@ -143,7 +145,7 @@
             const doc = parser.parseFromString(e.target.result, "text/html");
             const rows = Array.from(doc.querySelectorAll('tr'));
             
-            datosFinales = []; 
+            let datosTemporales = []; 
             totalCajas = 0;
             totalUnidades = 0;
             let cargaNro = "S/C";
@@ -163,7 +165,7 @@
                         let cantidad = parseInt(c[8]) || 0;
                         if (unidadMedida === 'CA') totalCajas += cantidad; else totalUnidades += cantidad;
 
-                        datosFinales.push({
+                        datosTemporales.push({
                             "Carga": cargaNro, "ART": c[1], "Descripción": c[4] || "", "PM/PH": tipoSeccion,
                             "Desc UM": unidadMedida, "Cantidad": cantidad,
                             "Ubicacion": formatearUbicacion(ubicacionRaw), "Cancha": calcularCancha(ubicacionRaw)
@@ -183,7 +185,7 @@
                             let cant = parsearCantidad(match[1]);
                             let um = match[2].toUpperCase();
                             if (um === 'CA') totalCajas += cant; else totalUnidades += cant;
-                            datosFinales.push({
+                            datosTemporales.push({
                                 "Carga": cargaNro, "ART": contextoActual.articulo, "Descripción": contextoActual.desc,
                                 "PM/PH": "picking", "Desc UM": um, "Cantidad": cant,
                                 "Ubicacion": formatearUbicacion(contextoActual.ubicacion), "Cancha": calcularCancha(contextoActual.ubicacion)
@@ -193,6 +195,33 @@
                     }
                 });
             }
+
+            // Lógica de "Tabla Dinámica" para unificar líneas de Picking idénticas
+            datosFinales = [];
+            datosTemporales.forEach(row => {
+                if (row["PM/PH"] === "picking") {
+                    let existente = datosFinales.find(r => 
+                        r["PM/PH"] === "picking" && 
+                        r["ART"] === row["ART"] && 
+                        r["Desc UM"] === row["Desc UM"] && 
+                        r["Ubicacion"] === row["Ubicacion"]
+                    );
+                    if (existente) {
+                        existente["Cantidad"] += row["Cantidad"];
+                    } else {
+                        datosFinales.push(row);
+                    }
+                } else {
+                    // Si no es picking (ej. pallet completo), se agrega tal cual sin agrupar
+                    datosFinales.push(row);
+                }
+            });
+
+            if(datosFinales.length === 0) {
+                alert("No se encontraron datos válidos. Verificá que el archivo coincida con el tipo de reporte seleccionado.");
+                return;
+            }
+
             renderizarUI();
         };
         reader.readAsText(file, "ISO-8859-1"); 
@@ -203,7 +232,7 @@
         tbody.innerHTML = "";
         datosFinales.forEach(fila => {
             const tr = document.createElement('tr');
-            tr.innerHTML = `<td>${fila["Carga"]}</td><td><b>${fila["ART"]}</b></td><td>${fila["Descripción"]}</td><td><span style="font-weight:bold;">${fila["PM/PH"]}</span></td><td><b>${fila["Desc UM"]}</b></td><td class="num-cell">${fila["Cantidad"]}</td>`;
+            tr.innerHTML = `<td>${fila["Carga"]}</td><td><b>${fila["ART"]}</b></td><td>${fila["Descripción"]}</td><td><span style="color: ${fila["PM/PH"] === 'picking' ? '#e67e22' : (fila["PM/PH"] === 'pallet completo' ? '#27ae60' : '#8e44ad')}; font-weight:bold;">${fila["PM/PH"]}</span></td><td><b>${fila["Desc UM"]}</b></td><td class="num-cell">${fila["Cantidad"]}</td>`;
             tbody.appendChild(tr);
         });
         document.getElementById('lblTotalCA').innerText = totalCajas.toLocaleString('es-AR');
@@ -219,16 +248,34 @@
         datosFinales.forEach(f => {
             textoCopiar += `${f["Carga"]}\t${f["ART"]}\t${f["Descripción"]}\t${f["PM/PH"]}\t${f["Desc UM"]}\t${f["Cantidad"]}\n`;
         });
-        navigator.clipboard.writeText(textoCopiar).then(() => alert("¡Datos copiados!"));
+        navigator.clipboard.writeText(textoCopiar).then(() => alert("¡Datos copiados! (6 columnas)."));
+    }
+
+    function copiarConUbicacion() {
+        if(datosFinales.length === 0) return;
+        let textoCopiar = ""; 
+        datosFinales.forEach(f => {
+            // Se suman las dos columnas extras al final
+            textoCopiar += `${f["Carga"]}\t${f["ART"]}\t${f["Descripción"]}\t${f["PM/PH"]}\t${f["Desc UM"]}\t${f["Cantidad"]}\t${f["Ubicacion"]}\t${f["Cancha"]}\n`;
+        });
+        navigator.clipboard.writeText(textoCopiar).then(() => alert("¡Datos copiados! (8 columnas, incluyendo Ubicación y Cancha)."));
     }
 
     function exportarExcel() {
         if(datosFinales.length === 0) return;
+        
+        let cargaName = datosFinales[0]["Carga"] || "SC";
         const worksheet = XLSX.utils.json_to_sheet(datosFinales);
-        worksheet['!cols'] = [{wch:10},{wch:10},{wch:40},{wch:15},{wch:10},{wch:10},{wch:12},{wch:12}];
+        
+        worksheet['!cols'] = [
+            { wch: 10 }, { wch: 10 }, { wch: 40 }, { wch: 15 }, { wch: 10 }, { wch: 10 }, { wch: 12 }, { wch: 12 }
+        ];
+
         const workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(workbook, worksheet, "Surtido_Extraido");
-        XLSX.writeFile(workbook, "Extraccion_JDE_Unificada.xlsx");
+        
+        // Exporta con el número de carga en el título
+        XLSX.writeFile(workbook, `Surtido_${cargaName}.xlsx`);
     }
 </script>
 </body>
