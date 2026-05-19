@@ -5,7 +5,7 @@
     <title>Extracción JDE Unificada - M2 Consultora</title>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
     <style>
-        :root { --primary: #2c3e50; --success: #27ae60; --info: #2980b9; --warning: #e67e22; --purple: #8e44ad; --dark-purple: #732d91; }
+        :root { --primary: #2c3e50; --success: #27ae60; --info: #2980b9; --warning: #e67e22; --purple: #8e44ad; }
         body { font-family: 'Segoe UI', sans-serif; background: #f4f7f6; padding: 20px; }
         .container { max-width: 1100px; margin: auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
         .header-title { text-align: center; color: var(--primary); margin-top: 0; }
@@ -196,7 +196,7 @@
                 });
             }
 
-            // Lógica de "Tabla Dinámica" para unificar líneas de Picking idénticas
+            // Unificación inteligente de Picking
             datosFinales = [];
             datosTemporales.forEach(row => {
                 if (row["PM/PH"] === "picking") {
@@ -212,7 +212,6 @@
                         datosFinales.push(row);
                     }
                 } else {
-                    // Si no es picking (ej. pallet completo), se agrega tal cual sin agrupar
                     datosFinales.push(row);
                 }
             });
@@ -253,12 +252,14 @@
 
     function copiarConUbicacion() {
         if(datosFinales.length === 0) return;
-        let textoCopiar = ""; 
+        
+        // CORRECCIÓN: Agregada la fila de encabezados para el portapapeles
+        let textoCopiar = "Carga\tART\tDescripción\tPM/PH\tDesc UM\tCantidad\tUbicacion\tCancha\n"; 
+        
         datosFinales.forEach(f => {
-            // Se suman las dos columnas extras al final
             textoCopiar += `${f["Carga"]}\t${f["ART"]}\t${f["Descripción"]}\t${f["PM/PH"]}\t${f["Desc UM"]}\t${f["Cantidad"]}\t${f["Ubicacion"]}\t${f["Cancha"]}\n`;
         });
-        navigator.clipboard.writeText(textoCopiar).then(() => alert("¡Datos copiados! (8 columnas, incluyendo Ubicación y Cancha)."));
+        navigator.clipboard.writeText(textoCopiar).then(() => alert("¡Datos copiados con encabezados! (8 columnas)."));
     }
 
     function exportarExcel() {
@@ -272,9 +273,11 @@
         ];
 
         const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, "Surtido_Extraido");
         
-        // Exporta con el número de carga en el título
+        // CORRECCIÓN: Nombre de la pestaña (hoja) dinámico con el número de carga
+        let nombrePestana = `Carga_${cargaName}`.substring(0, 31); 
+        XLSX.utils.book_append_sheet(workbook, worksheet, nombrePestana);
+        
         XLSX.writeFile(workbook, `Surtido_${cargaName}.xlsx`);
     }
 </script>
