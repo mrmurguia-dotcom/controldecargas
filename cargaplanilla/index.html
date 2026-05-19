@@ -82,7 +82,7 @@
                 </tr>
             </thead>
             <tbody id="tablaBody">
-                </tbody>
+            </tbody>
         </table>
     </div>
 </div>
@@ -92,7 +92,7 @@
     let totalCajas = 0;
     let totalUnidades = 0;
 
-    // --- LÓGICA DE DRAG AND DROP ---
+    // --- DRAG AND DROP ---
     const dropZone = document.getElementById('dropZone');
     const fileInput = document.getElementById('surtidoFile');
 
@@ -112,9 +112,7 @@
             fileInput.files = e.dataTransfer.files;
         }
     });
-    // -------------------------------
 
-    // Función auxiliar para parsear números de JDE
     function parsearCantidad(str) {
         if (!str) return 0;
         let clean = str.trim().replace(/\s/g, '');
@@ -158,7 +156,6 @@
 
                     const c = Array.from(tr.cells).map(td => td.innerText.trim());
                     
-                    // Detectar línea de artículo
                     if(c.length >= 8 && c[0].includes(".") && !isNaN(parseInt(c[1]))) {
                         let articulo = c[1];
                         let descripcion = c[4] || "";
@@ -169,7 +166,6 @@
                         if (textoFinales.includes("CA")) unidadMedida = "CA";
                         else if (textoFinales.includes("UN")) unidadMedida = "UN";
 
-                        // Sumatoria de totales
                         if (unidadMedida === 'CA') totalCajas += cantidad;
                         if (unidadMedida === 'UN') totalUnidades += cantidad;
 
@@ -196,7 +192,6 @@
                         if (m) cargaNro = m[1];
                     }
 
-                    // Capturar contexto del artículo
                     if (cells.length >= 8 && cells[0].includes('.')) {
                         contextoActual = {
                             articulo: cells[1],
@@ -204,14 +199,12 @@
                         };
                     }
 
-                    // Buscar la línea de "TOTAL SURTIDO"
                     if (text.toUpperCase().includes('TOTAL SURTIDO')) {
                         let match = text.match(/TOTAL SURTIDO:?\s*([\d\.,]+)\s*([A-Za-z]+)/i);
                         if (match && contextoActual.articulo) {
                             let cant = parsearCantidad(match[1]);
                             let um = match[2].toUpperCase();
 
-                            // Sumatoria de totales
                             if (um === 'CA') totalCajas += cant;
                             if (um === 'UN') totalUnidades += cant;
 
@@ -219,12 +212,11 @@
                                 "Carga": cargaNro,
                                 "ART": contextoActual.articulo,
                                 "Descripción": contextoActual.desc,
-                                "PM/PH": "picking", // Modificado: Todo multiorden es picking
+                                "PM/PH": "picking", 
                                 "Desc UM": um,
                                 "Cantidad": cant
                             });
                             
-                            // Limpiar contexto 
                             contextoActual = {};
                         }
                     }
@@ -242,7 +234,6 @@
     }
 
     function renderizarUI() {
-        // Actualizar tabla
         const tbody = document.getElementById('tablaBody');
         tbody.innerHTML = "";
 
@@ -259,11 +250,9 @@
             tbody.appendChild(tr);
         });
 
-        // Actualizar Totales
         document.getElementById('lblTotalCA').innerText = totalCajas.toLocaleString('es-AR');
         document.getElementById('lblTotalUN').innerText = totalUnidades.toLocaleString('es-AR');
 
-        // Mostrar elementos ocultos
         document.getElementById('resumenTotales').style.display = "flex";
         document.getElementById('resArea').style.display = "block";
         document.getElementById('actionBar').style.display = "flex";
@@ -272,14 +261,15 @@
     function copiarAlPortapapeles() {
         if(datosFinales.length === 0) return;
         
-        let textoCopiar = "Carga\tART\tDescripción\tPM/PH\tDesc UM\tCantidad\n";
+        // Se inicializa vacío para omitir la fila de títulos/encabezados
+        let textoCopiar = ""; 
         
         datosFinales.forEach(f => {
             textoCopiar += `${f["Carga"]}\t${f["ART"]}\t${f["Descripción"]}\t${f["PM/PH"]}\t${f["Desc UM"]}\t${f["Cantidad"]}\n`;
         });
 
         navigator.clipboard.writeText(textoCopiar).then(() => {
-            alert("¡Datos copiados! Podés pegarlos directamente en Excel (Ctrl+V).");
+            alert("¡Datos copiados sin encabezados! Ya podés pegarlos en tu Excel (Ctrl+V).");
         }).catch(err => {
             alert("Error al copiar: " + err);
         });
@@ -291,17 +281,11 @@
         const worksheet = XLSX.utils.json_to_sheet(datosFinales);
         
         worksheet['!cols'] = [
-            { wch: 10 },  // Carga
-            { wch: 10 },  // ART
-            { wch: 40 },  // Descripción
-            { wch: 15 },  // PM/PH
-            { wch: 10 },  // Desc UM
-            { wch: 10 }   // Cantidad
+            { wch: 10 }, { wch: 10 }, { wch: 40 }, { wch: 15 }, { wch: 10 }, { wch: 10 }
         ];
 
         const workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(workbook, worksheet, "Surtido_Extraido");
-
         XLSX.writeFile(workbook, "Extraccion_JDE_Unificada.xlsx");
     }
 </script>
