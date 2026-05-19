@@ -5,11 +5,14 @@
     <title>Extracción JDE Unificada - M2 Consultora</title>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
     <style>
-        :root { --primary: #2c3e50; --success: #27ae60; --info: #2980b9; --warning: #e67e22; }
+        :root { --primary: #2c3e50; --success: #27ae60; --info: #2980b9; --warning: #e67e22; --purple: #8e44ad; }
         body { font-family: 'Segoe UI', sans-serif; background: #f4f7f6; padding: 20px; }
         .container { max-width: 1100px; margin: auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
         .header-title { text-align: center; color: var(--primary); margin-top: 0; }
-        .box { border: 2px dashed #ccc; padding: 20px; border-radius: 8px; margin-bottom: 20px; text-align: center; background: #fafafa; }
+        
+        /* Zona de Drag & Drop */
+        .box { border: 2px dashed #ccc; padding: 20px; border-radius: 8px; margin-bottom: 20px; text-align: center; background: #fafafa; transition: 0.3s; }
+        .box.dragover { background-color: #eaf2f8; border-color: var(--info); }
         
         .controls { display: flex; gap: 15px; margin-bottom: 15px; justify-content: center; align-items: center; flex-wrap: wrap; }
         select, input[type="file"] { padding: 10px; font-size: 1em; border: 1px solid #ccc; border-radius: 4px; }
@@ -20,7 +23,12 @@
         .btn-copy { background: var(--warning); color: #fff; }
         .btn-export { background: var(--info); }
         
-        .action-bar { display: none; justify-content: flex-end; gap: 10px; margin-top: 15px; margin-bottom: 10px; }
+        /* Resumen de totales */
+        .resumen-totales { display: none; justify-content: space-around; background: #ebf2f7; padding: 15px; border-radius: 5px; margin-bottom: 15px; border: 1px solid #d1d9e0; font-size: 1.2em; font-weight: bold; }
+        .total-ca { color: var(--info); }
+        .total-un { color: var(--purple); }
+
+        .action-bar { display: none; justify-content: flex-end; gap: 10px; margin-bottom: 10px; }
         
         .table-container { overflow-x: auto; max-height: 500px; overflow-y: auto; border: 1px solid #ddd; display: none; }
         table { width: 100%; border-collapse: collapse; white-space: nowrap; }
@@ -35,7 +43,7 @@
 <div class="container">
     <h2 class="header-title">📊 Extractor Unificado JDE a Excel</h2>
     
-    <div class="box">
+    <div class="box" id="dropZone">
         <div class="controls">
             <label style="font-weight: bold; color: #333;">1. Tipo de Reporte:</label>
             <select id="tipoReporte">
@@ -46,8 +54,14 @@
             <label style="font-weight: bold; color: #333; margin-left: 10px;">2. Archivo:</label>
             <input type="file" id="surtidoFile" accept=".xls,.xlsx,.htm,.html">
         </div>
+        <p style="color: #666; margin-top: 0; margin-bottom: 15px; font-size: 0.9em;">(Podés arrastrar y soltar el archivo acá dentro)</p>
 
         <button class="btn btn-process" onclick="procesarReporte()">⚡ PROCESAR DATOS</button>
+    </div>
+
+    <div class="resumen-totales" id="resumenTotales">
+        <div class="total-ca">TOTAL CA: <span id="lblTotalCA">0</span></div>
+        <div class="total-un">TOTAL UN: <span id="lblTotalUN">0</span></div>
     </div>
 
     <div class="action-bar" id="actionBar">
@@ -75,6 +89,30 @@
 
 <script>
     let datosFinales = [];
+    let totalCajas = 0;
+    let totalUnidades = 0;
+
+    // --- LÓGICA DE DRAG AND DROP ---
+    const dropZone = document.getElementById('dropZone');
+    const fileInput = document.getElementById('surtidoFile');
+
+    dropZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropZone.classList.add('dragover');
+    });
+
+    dropZone.addEventListener('dragleave', () => {
+        dropZone.classList.remove('dragover');
+    });
+
+    dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropZone.classList.remove('dragover');
+        if (e.dataTransfer.files.length) {
+            fileInput.files = e.dataTransfer.files;
+        }
+    });
+    // -------------------------------
 
     // Función auxiliar para parsear números de JDE
     function parsearCantidad(str) {
@@ -90,10 +128,10 @@
     }
 
     function procesarReporte() {
-        const file = document.getElementById('surtidoFile').files[0];
+        const file = fileInput.files[0];
         const tipo = document.getElementById('tipoReporte').value;
         
-        if(!file) return alert("Por favor, seleccioná el archivo del reporte JDE.");
+        if(!file) return alert("Por favor, seleccioná o arrastrá el archivo del reporte JDE.");
 
         const reader = new FileReader();
         reader.onload = (e) => {
@@ -102,6 +140,8 @@
             const rows = Array.from(doc.querySelectorAll('tr'));
             
             datosFinales = []; 
+            totalCajas = 0;
+            totalUnidades = 0;
             let cargaNro = "S/C";
             
             if (tipo === 'estandar') {
@@ -129,6 +169,10 @@
                         if (textoFinales.includes("CA")) unidadMedida = "CA";
                         else if (textoFinales.includes("UN")) unidadMedida = "UN";
 
+                        // Sumatoria de totales
+                        if (unidadMedida === 'CA') totalCajas += cantidad;
+                        if (unidadMedida === 'UN') totalUnidades += cantidad;
+
                         datosFinales.push({
                             "Carga": cargaNro,
                             "ART": articulo,
@@ -152,11 +196,11 @@
                         if (m) cargaNro = m[1];
                     }
 
-                    // Capturar contexto del artículo (ubicación, ART, etc.)
+                    // Capturar contexto del artículo
                     if (cells.length >= 8 && cells[0].includes('.')) {
                         contextoActual = {
                             articulo: cells[1],
-                            desc: cells[3] // En tu código base de multiorden, la desc estaba en la col 3
+                            desc: cells[3] 
                         };
                     }
 
@@ -167,16 +211,20 @@
                             let cant = parsearCantidad(match[1]);
                             let um = match[2].toUpperCase();
 
+                            // Sumatoria de totales
+                            if (um === 'CA') totalCajas += cant;
+                            if (um === 'UN') totalUnidades += cant;
+
                             datosFinales.push({
                                 "Carga": cargaNro,
                                 "ART": contextoActual.articulo,
                                 "Descripción": contextoActual.desc,
-                                "PM/PH": "Multiorden", // Por defecto al no haber PH/PM explícito
+                                "PM/PH": "picking", // Modificado: Todo multiorden es picking
                                 "Desc UM": um,
                                 "Cantidad": cant
                             });
                             
-                            // Limpiar contexto para evitar duplicados accidentales
+                            // Limpiar contexto 
                             contextoActual = {};
                         }
                     }
@@ -188,12 +236,13 @@
                 return;
             }
 
-            renderizarTabla();
+            renderizarUI();
         };
         reader.readAsText(file, "ISO-8859-1"); 
     }
 
-    function renderizarTabla() {
+    function renderizarUI() {
+        // Actualizar tabla
         const tbody = document.getElementById('tablaBody');
         tbody.innerHTML = "";
 
@@ -210,6 +259,12 @@
             tbody.appendChild(tr);
         });
 
+        // Actualizar Totales
+        document.getElementById('lblTotalCA').innerText = totalCajas.toLocaleString('es-AR');
+        document.getElementById('lblTotalUN').innerText = totalUnidades.toLocaleString('es-AR');
+
+        // Mostrar elementos ocultos
+        document.getElementById('resumenTotales').style.display = "flex";
         document.getElementById('resArea').style.display = "block";
         document.getElementById('actionBar').style.display = "flex";
     }
@@ -217,7 +272,6 @@
     function copiarAlPortapapeles() {
         if(datosFinales.length === 0) return;
         
-        // Armamos un string separado por tabulaciones (\t) para que pegue en columnas
         let textoCopiar = "Carga\tART\tDescripción\tPM/PH\tDesc UM\tCantidad\n";
         
         datosFinales.forEach(f => {
@@ -250,9 +304,6 @@
 
         XLSX.writeFile(workbook, "Extraccion_JDE_Unificada.xlsx");
     }
-</script>
-</body>
-</html>
 </script>
 </body>
 </html>
