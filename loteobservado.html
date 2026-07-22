@@ -3,20 +3,32 @@
 <head>
     <meta charset="UTF-8">
     <title>Cruce Maestro de Lotes vs Pallet (Excel) - M2 Consultora</title>
-    <!-- Solo necesitamos SheetJS para leer ambos Excel -->
     <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
     <style>
-        :root { --primary: #2c3e50; --success: #27ae60; --info: #2980b9; --warning: #e67e22; --purple: #8e44ad; --danger: #c0392b; }
+        :root { --primary: #2c3e50; --success: #27ae60; --info: #2980b9; --warning: #e67e22; --danger: #c0392b; }
         body { font-family: 'Segoe UI', sans-serif; background: #f4f7f6; padding: 20px; }
         .container { max-width: 1100px; margin: auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
         .header-title { text-align: center; color: var(--primary); margin-top: 0; }
         
-        .box { border: 2px dashed #ccc; padding: 20px; border-radius: 8px; margin-bottom: 20px; text-align: center; background: #fafafa; transition: 0.3s; }
-        
+        .box { border: 2px dashed #ccc; padding: 20px; border-radius: 8px; margin-bottom: 20px; background: #fafafa; }
         .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; text-align: left; }
-        .input-group { display: flex; flex-direction: column; gap: 5px; }
-        select, input[type="file"] { padding: 10px; font-size: 1em; border: 1px solid #ccc; border-radius: 4px; background: white; width: 100%; box-sizing: border-box; }
         
+        /* Estilos para Drag & Drop */
+        .drop-area { 
+            border: 2px dashed #bdc3c7; 
+            padding: 20px; 
+            border-radius: 6px; 
+            background: #fff; 
+            transition: all 0.3s ease; 
+            position: relative;
+        }
+        .drop-area.dragover { 
+            background-color: #ebf2f7; 
+            border-color: var(--info); 
+        }
+        .drop-area label { font-weight: bold; color: #333; display: block; margin-bottom: 10px; }
+        .drop-area input[type="file"] { width: 100%; cursor: pointer; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box;}
+
         .btn { border: none; padding: 12px 20px; border-radius: 5px; font-weight: bold; cursor: pointer; font-size: 1em; color: white; transition: 0.2s; }
         .btn:hover { opacity: 0.9; }
         .btn-process { background: var(--success); width: 100%; font-size: 1.1em; padding: 15px; }
@@ -40,17 +52,20 @@
 <body>
 
 <div class="container">
-    <h2 class="header-title">📦 Cruce: PM (Excel) vs MST Lotes JDE</h2>
+    <h2 class="header-title">📦 Cruce: Pallets (Excel) vs Maestro de Lotes JDE</h2>
     
-    <div class="box" id="dropZone">
+    <div class="box">
         <div class="controls">
-            <div class="input-group">
-                <label style="font-weight: bold; color: #333;">1. Hoja del Pallet (Excel):</label>
-                <input type="file" id="palletFile" accept=".xls,.xlsx">
+            <!-- Zona de Drop para el Pallet -->
+            <div class="drop-area" id="dropAreaPallet">
+                <label>1. Hoja del Pallet (Excel):</label>
+                <input type="file" id="palletFile" accept=".xls,.xlsx" title="Arrastrá tu archivo acá">
             </div>
-            <div class="input-group">
-                <label style="font-weight: bold; color: #333;">2. Maestro JDE (Excel):</label>
-                <input type="file" id="maestroFile" accept=".xls,.xlsx">
+            
+            <!-- Zona de Drop para el Maestro -->
+            <div class="drop-area" id="dropAreaMaestro">
+                <label>2. Maestro JDE (Excel):</label>
+                <input type="file" id="maestroFile" accept=".xls,.xlsx" title="Arrastrá tu archivo acá">
             </div>
         </div>
 
@@ -71,10 +86,11 @@
         <table id="tablaResultados">
             <thead>
                 <tr>
-                    <th>Lote (Col D)</th>
-                    <th>LotStatus (Col E)</th>
-                    <th>Artículo (Col M)</th>
-                    <th>Descripción (Col N)</th>
+                    <th>Lote</th>
+                    <th>LotStatus</th>
+                    <th>Artículo</th>
+                    <th>Descripción</th>
+                    <th>Cantidad</th>
                 </tr>
             </thead>
             <tbody id="tablaBody">
@@ -85,9 +101,47 @@
 
 <script>
     let datosFinales = [];
-    let lotesEnPallet = new Set();
+    // Cambiamos Set por Map para guardar Lote (Clave) y Cantidad (Valor)
+    let lotesMap = new Map(); 
 
-    // Función auxiliar para leer archivos de Excel como Promesas
+    // --- CONFIGURACIÓN DRAG & DROP ---
+    function setupDragAndDrop(dropAreaId, inputId) {
+        const dropArea = document.getElementById(dropAreaId);
+        const input = document.getElementById(inputId);
+
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropArea.addEventListener(eventName, preventDefaults, false);
+        });
+
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropArea.addEventListener(eventName, () => dropArea.classList.add('dragover'), false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropArea.addEventListener(eventName, () => dropArea.classList.remove('dragover'), false);
+        });
+
+        dropArea.addEventListener('drop', (e) => {
+            let dt = e.dataTransfer;
+            let files = dt.files;
+            if(files.length > 0) {
+                input.files = files; // Asigna el archivo soltado al input
+            }
+        });
+    }
+
+    // Inicializar Drag & Drop al cargar la página
+    window.onload = () => {
+        setupDragAndDrop('dropAreaPallet', 'palletFile');
+        setupDragAndDrop('dropAreaMaestro', 'maestroFile');
+    };
+    // ---------------------------------
+
     function leerExcelAsincrono(file) {
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
@@ -111,7 +165,7 @@
         const btn = document.getElementById('btnProcess');
 
         if (!palletFile || !maestroFile) {
-            return alert("Por favor, seleccioná ambos archivos Excel antes de procesar.");
+            return alert("Por favor, seleccioná o arrastrá ambos archivos Excel antes de procesar.");
         }
 
         btn.innerText = "⏳ Procesando... Por favor esperá";
@@ -119,35 +173,31 @@
         btn.disabled = true;
         
         try {
-            lotesEnPallet.clear();
+            lotesMap.clear();
             datosFinales = [];
 
             // ==========================================
-            // PASO 1: LEER ARCHIVO DEL PALLET (Columna F)
+            // PASO 1: LEER ARCHIVO DEL PALLET (Col F: Lote, Col G: Cantidad)
             // ==========================================
             const wbPallet = await leerExcelAsincrono(palletFile);
-            const nombreHojaPallet = wbPallet.SheetNames[0]; // Toma la primera hoja por defecto
-            
-            // Leemos forzando que las cabeceras sean las letras de las columnas
+            const nombreHojaPallet = wbPallet.SheetNames[0]; 
             const excelDataPallet = XLSX.utils.sheet_to_json(wbPallet.Sheets[nombreHojaPallet], { header: "A", defval: "" });
             
-            // Empezamos en 1 para saltear la fila de títulos si la hay
             for (let i = 1; i < excelDataPallet.length; i++) {
-                // Tomamos la Columna F y aplicamos la aplanadora de espacios invisibles
                 let loteEncontrado = String(excelDataPallet[i]["F"] || "").replace(/\s+/g, '');
+                let cantidad = String(excelDataPallet[i]["G"] || "").trim(); // Captura la columna G
                 
-                // Evitamos celdas vacías o con textos muy cortos
                 if (loteEncontrado.length > 3 && loteEncontrado !== "Nºdelote/serie") {
-                    lotesEnPallet.add(loteEncontrado);
+                    lotesMap.set(loteEncontrado, cantidad); // Guarda el lote con su cantidad
                 }
             }
 
-            if (lotesEnPallet.size === 0) {
+            if (lotesMap.size === 0) {
                 throw new Error("No se pudo detectar ningún lote válido en la columna F del archivo del Pallet.");
             }
 
             // ==========================================
-            // PASO 2: LEER MAESTRO JDE (Columnas D, E, M, N)
+            // PASO 2: LEER MAESTRO JDE
             // ==========================================
             const wbMaestro = await leerExcelAsincrono(maestroFile);
             const sheetNameMaestro = 'legacy vStockPT';
@@ -160,20 +210,20 @@
             
             for (let i = 1; i < excelDataMaestro.length; i++) {
                 let row = excelDataMaestro[i];
-                
-                // Limpiamos los espacios del maestro para que el match sea perfecto
                 let loteMaestro = String(row["D"] || "").replace(/\s+/g, '');
                 let status = String(row["E"] || "").trim();
                 let articulo = String(row["M"] || "").trim();
                 let descripcion = String(row["N"] || "").trim();
                 
-                // Cruce de datos
-                if (lotesEnPallet.has(loteMaestro) && status !== "") {
+                if (lotesMap.has(loteMaestro) && status !== "") {
+                    let cantidadEnPallet = lotesMap.get(loteMaestro); // Recupera la cantidad guardada
+                    
                     datosFinales.push({
                         "Lote": loteMaestro,
                         "LotStatus": status,
                         "Articulo": articulo,
-                        "Descripcion": descripcion
+                        "Descripcion": descripcion,
+                        "Cantidad": cantidadEnPallet
                     });
                 }
             }
@@ -199,7 +249,7 @@
         
         if (datosFinales.length === 0) {
             const tr = document.createElement('tr');
-            tr.innerHTML = `<td colspan="4" style="text-align:center; font-weight:bold; color:#27ae60;">✅ No se encontraron lotes observados para este pallet.</td>`;
+            tr.innerHTML = `<td colspan="5" style="text-align:center; font-weight:bold; color:#27ae60;">✅ No se encontraron lotes observados para este pallet.</td>`;
             tbody.appendChild(tr);
         } else {
             datosFinales.forEach(fila => {
@@ -209,12 +259,13 @@
                     <td class="status-alert">${fila["LotStatus"]}</td>
                     <td>${fila["Articulo"]}</td>
                     <td>${fila["Descripcion"]}</td>
+                    <td><b>${fila["Cantidad"]}</b></td>
                 `;
                 tbody.appendChild(tr);
             });
         }
 
-        document.getElementById('lblTotalPallet').innerText = lotesEnPallet.size;
+        document.getElementById('lblTotalPallet').innerText = lotesMap.size;
         document.getElementById('lblTotalObs').innerText = datosFinales.length;
         document.getElementById('resumenTotales').style.display = "flex";
         document.getElementById('resArea').style.display = "block";
@@ -224,9 +275,9 @@
     function copiarAlPortapapeles() {
         if (datosFinales.length === 0) return alert("No hay datos observados para copiar.");
         
-        let textoCopiar = "Lote\tLotStatus\tArticulo\tDescripcion\n"; 
+        let textoCopiar = "Lote\tLotStatus\tArticulo\tDescripcion\tCantidad\n"; 
         datosFinales.forEach(f => {
-            textoCopiar += `${f["Lote"]}\t${f["LotStatus"]}\t${f["Articulo"]}\t${f["Descripcion"]}\n`;
+            textoCopiar += `${f["Lote"]}\t${f["LotStatus"]}\t${f["Articulo"]}\t${f["Descripcion"]}\t${f["Cantidad"]}\n`;
         });
         
         navigator.clipboard.writeText(textoCopiar).then(() => alert("¡Datos copiados al portapapeles!"));
@@ -238,7 +289,7 @@
         const worksheet = XLSX.utils.json_to_sheet(datosFinales);
         
         worksheet['!cols'] = [
-            { wch: 20 }, { wch: 10 }, { wch: 15 }, { wch: 45 }
+            { wch: 20 }, { wch: 10 }, { wch: 15 }, { wch: 45 }, { wch: 10 }
         ];
 
         const workbook = XLSX.utils.book_new();
