@@ -3,9 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>Cruce MST de Lotes vs PM - M2 Consultora</title>
-    <!-- Librería para leer Excel -->
     <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
-    <!-- Librerías para leer PDF -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
     <style>
         :root { --primary: #2c3e50; --success: #27ae60; --info: #2980b9; --warning: #e67e22; --purple: #8e44ad; --danger: #c0392b; }
@@ -42,7 +40,7 @@
 <body>
 
 <div class="container">
-    <h2 class="header-title">📦 Cruce: Pallets vs Maestro de Lotes JDE</h2>
+    <h2 class="header-title">📦 Cruce: PM vs MST de Lotes JDE</h2>
     
     <div class="box" id="dropZone">
         <div class="controls">
@@ -73,13 +71,10 @@
         <table id="tablaResultados">
             <thead>
                 <tr>
-                    <th>MCU</th>
-                    <th>Ubicación</th>
-                    <th>Lote</th>
-                    <th>LotStatus</th>
-                    <th>Planta</th>
-                    <th>Artículo</th>
-                    <th>Descripción</th>
+                    <th>Lote (Col D)</th>
+                    <th>LotStatus (Col E)</th>
+                    <th>Artículo (Col M)</th>
+                    <th>Descripción (Col N)</th>
                 </tr>
             </thead>
             <tbody id="tablaBody">
@@ -89,7 +84,6 @@
 </div>
 
 <script>
-    // Configuración del Worker de PDF.js
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
 
     let datosFinales = [];
@@ -109,7 +103,9 @@
         btn.disabled = true;
         
         try {
-            // PASO 1: Extraer Lotes del PDF
+            // ==========================================
+            // PASO 1: EXTRAER LOTES DEL PDF (Mejorado)
+            // ==========================================
             lotesEnPallet.clear();
             const arrayBufferPdf = await pdfFile.arrayBuffer();
             const pdf = await pdfjsLib.getDocument({data: arrayBufferPdf}).promise;
@@ -121,9 +117,9 @@
                 let lastY = -1;
                 let currentLine = "";
                 
-                // Agrupar el texto por coordenadas Y para reconstruir líneas
                 content.items.forEach(item => {
-                    if (lastY !== item.transform[5] && lastY !== -1) {
+                    // Tolerancia de 5 puntos en Y para evitar cortes de línea por errores de renderizado
+                    if (lastY !== -1 && Math.abs(lastY - item.transform[5]) > 5) {
                         procesarLineaPDF(currentLine.trim());
                         currentLine = "";
                     }
@@ -137,7 +133,9 @@
                 throw new Error("No se pudo detectar ningún lote válido en el PDF.");
             }
 
-            // PASO 2: Leer el Excel y cruzar datos
+            // ==========================================
+            // PASO 2: LEER EXCEL POR COLUMNAS EXACTAS
+            // ==========================================
             const reader = new FileReader();
             reader.onload = (e) => {
                 const data = new Uint8Array(e.target.result);
@@ -145,48 +143,64 @@
                 
                 const sheetName = 'legacy vStockPT';
                 if (!workbook.Sheets[sheetName]) {
-                    btn.innerText = "⚡ BUSCAR LOTES OBSERVADOS";
-                    btn.disabled = false;
-                    btn.style.opacity = "1";
-                    return alert(`No se encontró la pestaña '${sheetName}' en el Excel cargado.`);
+                    restaurarBoton(btn);
+                    return alert(`No se encontró la pestaña '${sheetName}' en el Excel.`);
                 }
                 
-                const excelData = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], {defval: ""});
+                // header: "A" fuerza a que el JSON use las letras de las columnas como claves
+                const excelData = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: "A", defval: "" });
                 
-                // Filtrar: El lote debe estar en el PDF y el LotStatus NO debe estar vacío
-                datosFinales = excelData.filter(row => {
-                    let lote = row['Lote'] ? String(row['Lote']).trim() : "";
-                    let status = row['LotStatus'] ? String(row['LotStatus']).trim() : "";
+                datosFinales = [];
+                
+                // Empezamos desde i=1 para omitir la fila de encabezados si fuera necesario
+                for (let i = 1; i < excelData.length; i++) {
+                    let row = excelData[i];
                     
-                    return lotesEnPallet.has(lote) && status !== "";
-                });
+                    // Extraemos según las letras indicadas
+                    let lote = String(row["D"] || "").trim();
+                    let status = String(row["E"] || "").trim();
+                    let articulo = String(row["M"] || "").trim();
+                    let descripcion = String(row["N"] || "").trim();
+                    
+                    if (lotesEnPallet.has(lote) && status !== "") {
+                        datosFinales.push({
+                            "Lote": lote,
+                            "LotStatus": status,
+                            "Articulo": articulo,
+                            "Descripcion": descripcion
+                        });
+                    }
+                }
                 
                 renderizarUI();
-                
-                btn.innerText = "⚡ BUSCAR LOTES OBSERVADOS";
-                btn.disabled = false;
-                btn.style.opacity = "1";
+                restaurarBoton(btn);
             };
             reader.readAsArrayBuffer(excelFile);
 
         } catch (error) {
-            btn.innerText = "⚡ BUSCAR LOTES OBSERVADOS";
-            btn.disabled = false;
-            btn.style.opacity = "1";
+            restaurarBoton(btn);
             alert("Ocurrió un error: " + error.message);
         }
     }
 
     function procesarLineaPDF(line) {
-        // Ignorar encabezados
-        if (line.includes("Cod. Art") || line.includes("Nro Pallet") || line.length < 10) return;
+        // Limpiamos espacios dobles para facilitar la lectura
+        const cleanLine = line.replace(/\s+/g, ' ');
         
-        const tokens = line.split(/\s+/).filter(t => t.trim() !== "");
-        // Validar que la línea tenga suficientes elementos para buscar el lote (4to desde el final)
-        if (tokens.length >= 5) {
-            const lote = tokens[tokens.length - 4];
+        // Expresión Regular: Busca al final de la línea 4 bloques separados por espacios
+        // 1. (Lote)  2. (Ubicación)  3. (Cantidad)  4. (U/M, ej. CA, UN)
+        const match = cleanLine.match(/(\S+)\s+(\S+)\s+([\d\.,]+)\s+([A-Za-z]+)$/i);
+        
+        if (match) {
+            const lote = match[1]; // El primer grupo capturado de atrás hacia adelante es el Lote
             lotesEnPallet.add(lote);
         }
+    }
+
+    function restaurarBoton(btn) {
+        btn.innerText = "⚡ BUSCAR LOTES OBSERVADOS";
+        btn.disabled = false;
+        btn.style.opacity = "1";
     }
 
     function renderizarUI() {
@@ -195,19 +209,16 @@
         
         if (datosFinales.length === 0) {
             const tr = document.createElement('tr');
-            tr.innerHTML = `<td colspan="7" style="text-align:center; font-weight:bold; color:#27ae60;">✅ No se encontraron lotes observados para este pallet.</td>`;
+            tr.innerHTML = `<td colspan="4" style="text-align:center; font-weight:bold; color:#27ae60;">✅ No se encontraron lotes observados para este pallet.</td>`;
             tbody.appendChild(tr);
         } else {
             datosFinales.forEach(fila => {
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
-                    <td>${fila["MCU"] || ""}</td>
-                    <td>${fila["Ubicacion"] || ""}</td>
-                    <td><b>${fila["Lote"] || ""}</b></td>
-                    <td class="status-alert">${fila["LotStatus"] || ""}</td>
-                    <td>${fila["descplanta"] || ""}</td>
-                    <td>${fila["articulo"] || ""}</td>
-                    <td>${fila["articulodescripcion"] || ""}</td>
+                    <td><b>${fila["Lote"]}</b></td>
+                    <td class="status-alert">${fila["LotStatus"]}</td>
+                    <td>${fila["Articulo"]}</td>
+                    <td>${fila["Descripcion"]}</td>
                 `;
                 tbody.appendChild(tr);
             });
@@ -221,39 +232,24 @@
     }
 
     function copiarAlPortapapeles() {
-        if (datosFinales.length === 0) {
-            return alert("No hay datos observados para copiar.");
-        }
+        if (datosFinales.length === 0) return alert("No hay datos observados para copiar.");
         
-        let textoCopiar = "MCU\tUbicacion\tLote\tLotStatus\tdescplanta\tarticulo\tarticulodescripcion\n"; 
+        let textoCopiar = "Lote\tLotStatus\tArticulo\tDescripcion\n"; 
         datosFinales.forEach(f => {
-            textoCopiar += `${f["MCU"] || ""}\t${f["Ubicacion"] || ""}\t${f["Lote"] || ""}\t${f["LotStatus"] || ""}\t${f["descplanta"] || ""}\t${f["articulo"] || ""}\t${f["articulodescripcion"] || ""}\n`;
+            textoCopiar += `${f["Lote"]}\t${f["LotStatus"]}\t${f["Articulo"]}\t${f["Descripcion"]}\n`;
         });
         
         navigator.clipboard.writeText(textoCopiar).then(() => alert("¡Datos copiados al portapapeles!"));
     }
 
     function exportarExcel() {
-        if (datosFinales.length === 0) {
-            return alert("No hay datos observados para exportar.");
-        }
+        if (datosFinales.length === 0) return alert("No hay datos observados para exportar.");
         
-        // Formatear los datos para el Excel exportado dejando solo las columnas necesarias
-        const datosParaExportar = datosFinales.map(f => ({
-            "MCU": f["MCU"],
-            "Ubicacion": f["Ubicacion"],
-            "Lote": f["Lote"],
-            "LotStatus": f["LotStatus"],
-            "Planta": f["descplanta"],
-            "Artículo": f["articulo"],
-            "Descripción": f["articulodescripcion"]
-        }));
-
-        const worksheet = XLSX.utils.json_to_sheet(datosParaExportar);
+        const worksheet = XLSX.utils.json_to_sheet(datosFinales);
         
         // Ajustar el ancho de las columnas
         worksheet['!cols'] = [
-            { wch: 8 }, { wch: 12 }, { wch: 15 }, { wch: 10 }, { wch: 15 }, { wch: 10 }, { wch: 35 }
+            { wch: 20 }, { wch: 10 }, { wch: 15 }, { wch: 45 }
         ];
 
         const workbook = XLSX.utils.book_new();
