@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Cruce MST de Lotes vs PM - M2 Consultora</title>
+    <title>Cruce Maestro de Lotes vs Pallet - M2 Consultora</title>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
     <style>
@@ -40,7 +40,7 @@
 <body>
 
 <div class="container">
-    <h2 class="header-title">📦 Cruce: PM vs MST de Lotes JDE</h2>
+    <h2 class="header-title">📦 Cruce: Pallets vs Maestro de Lotes JDE</h2>
     
     <div class="box" id="dropZone">
         <div class="controls">
@@ -104,7 +104,7 @@
         
         try {
             // ==========================================
-            // PASO 1: EXTRAER LOTES DEL PDF (Mejorado)
+            // PASO 1: EXTRAER LOTES DEL PDF (Lógica Flexibilizada)
             // ==========================================
             lotesEnPallet.clear();
             const arrayBufferPdf = await pdfFile.arrayBuffer();
@@ -118,15 +118,14 @@
                 let currentLine = "";
                 
                 content.items.forEach(item => {
-                    // Tolerancia de 5 puntos en Y para evitar cortes de línea por errores de renderizado
                     if (lastY !== -1 && Math.abs(lastY - item.transform[5]) > 5) {
-                        procesarLineaPDF(currentLine.trim());
+                        procesarLineaPDF(currentLine);
                         currentLine = "";
                     }
                     currentLine += item.str + " ";
                     lastY = item.transform[5];
                 });
-                if (currentLine) procesarLineaPDF(currentLine.trim());
+                if (currentLine) procesarLineaPDF(currentLine);
             }
 
             if (lotesEnPallet.size === 0) {
@@ -134,7 +133,7 @@
             }
 
             // ==========================================
-            // PASO 2: LEER EXCEL POR COLUMNAS EXACTAS
+            // PASO 2: LEER EXCEL (Limpieza extrema de celdas)
             // ==========================================
             const reader = new FileReader();
             reader.onload = (e) => {
@@ -147,24 +146,22 @@
                     return alert(`No se encontró la pestaña '${sheetName}' en el Excel.`);
                 }
                 
-                // header: "A" fuerza a que el JSON use las letras de las columnas como claves
                 const excelData = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: "A", defval: "" });
                 
                 datosFinales = [];
                 
-                // Empezamos desde i=1 para omitir la fila de encabezados si fuera necesario
                 for (let i = 1; i < excelData.length; i++) {
                     let row = excelData[i];
                     
-                    // Extraemos según las letras indicadas
-                    let lote = String(row["D"] || "").trim();
+                    // .replace(/\s+/g, '') destruye absolutamente todos los espacios invisibles de JDE
+                    let loteExcel = String(row["D"] || "").replace(/\s+/g, '');
                     let status = String(row["E"] || "").trim();
                     let articulo = String(row["M"] || "").trim();
                     let descripcion = String(row["N"] || "").trim();
                     
-                    if (lotesEnPallet.has(lote) && status !== "") {
+                    if (lotesEnPallet.has(loteExcel) && status !== "") {
                         datosFinales.push({
-                            "Lote": lote,
+                            "Lote": loteExcel,
                             "LotStatus": status,
                             "Articulo": articulo,
                             "Descripcion": descripcion
@@ -184,16 +181,24 @@
     }
 
     function procesarLineaPDF(line) {
-        // Limpiamos espacios dobles para facilitar la lectura
-        const cleanLine = line.replace(/\s+/g, ' ');
+        // Ignoramos encabezados directamente
+        if (line.includes("Cod. Art") || line.includes("Nro Pallet")) return;
+
+        // Dividimos la línea entera utilizando cualquier cantidad de espacios como separador
+        const tokens = line.trim().split(/\s+/);
         
-        // Expresión Regular: Busca al final de la línea 4 bloques separados por espacios
-        // 1. (Lote)  2. (Ubicación)  3. (Cantidad)  4. (U/M, ej. CA, UN)
-        const match = cleanLine.match(/(\S+)\s+(\S+)\s+([\d\.,]+)\s+([A-Za-z]+)$/i);
-        
-        if (match) {
-            const lote = match[1]; // El primer grupo capturado de atrás hacia adelante es el Lote
-            lotesEnPallet.add(lote);
+        // Verificamos que sea una fila con datos suficientes (asumiendo que tiene al menos 5 columnas)
+        if (tokens.length >= 5) {
+            // El lote siempre está 4 posiciones hacia atrás contando desde el final (Lote, Ubicación, Cantidad, U/M)
+            const loteCandidato = tokens[tokens.length - 4];
+            
+            // Le quitamos cualquier espacio invisible al lote encontrado en el PDF por si acaso
+            const loteLimpio = loteCandidato.replace(/\s+/g, '');
+            
+            // Validamos que tenga un tamaño lógico para ser un lote (evita capturar basuras cortas)
+            if (loteLimpio.length > 3) {
+                lotesEnPallet.add(loteLimpio);
+            }
         }
     }
 
@@ -247,7 +252,6 @@
         
         const worksheet = XLSX.utils.json_to_sheet(datosFinales);
         
-        // Ajustar el ancho de las columnas
         worksheet['!cols'] = [
             { wch: 20 }, { wch: 10 }, { wch: 15 }, { wch: 45 }
         ];
