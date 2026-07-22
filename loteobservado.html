@@ -2,9 +2,9 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Cruce Maestro de Lotes vs Pallet - M2 Consultora</title>
+    <title>Cruce Maestro de Lotes vs Pallet (Excel) - M2 Consultora</title>
+    <!-- Solo necesitamos SheetJS para leer ambos Excel -->
     <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
     <style>
         :root { --primary: #2c3e50; --success: #27ae60; --info: #2980b9; --warning: #e67e22; --purple: #8e44ad; --danger: #c0392b; }
         body { font-family: 'Segoe UI', sans-serif; background: #f4f7f6; padding: 20px; }
@@ -40,17 +40,17 @@
 <body>
 
 <div class="container">
-    <h2 class="header-title">📦 Cruce: Pallets vs Maestro de Lotes JDE</h2>
+    <h2 class="header-title">📦 Cruce: Pallets (Excel) vs Maestro de Lotes JDE</h2>
     
     <div class="box" id="dropZone">
         <div class="controls">
             <div class="input-group">
-                <label style="font-weight: bold; color: #333;">1. Hoja del Pallet (PDF):</label>
-                <input type="file" id="pdfFile" accept=".pdf">
+                <label style="font-weight: bold; color: #333;">1. Hoja del Pallet (Excel):</label>
+                <input type="file" id="palletFile" accept=".xls,.xlsx">
             </div>
             <div class="input-group">
                 <label style="font-weight: bold; color: #333;">2. Maestro JDE (Excel):</label>
-                <input type="file" id="excelFile" accept=".xls,.xlsx">
+                <input type="file" id="maestroFile" accept=".xls,.xlsx">
             </div>
         </div>
 
@@ -58,7 +58,7 @@
     </div>
 
     <div class="resumen-totales" id="resumenTotales">
-        <div class="total-pdf">Lotes leídos del PDF: <span id="lblTotalPDF">0</span></div>
+        <div class="total-pdf">Lotes leídos del Pallet: <span id="lblTotalPallet">0</span></div>
         <div class="total-obs">Lotes Observados encontrados: <span id="lblTotalObs">0</span></div>
     </div>
 
@@ -84,18 +84,34 @@
 </div>
 
 <script>
-    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
-
     let datosFinales = [];
     let lotesEnPallet = new Set();
 
+    // Función auxiliar para leer archivos de Excel como Promesas
+    function leerExcelAsincrono(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, {type: 'array'});
+                    resolve(workbook);
+                } catch (err) {
+                    reject(err);
+                }
+            };
+            reader.onerror = (error) => reject(error);
+            reader.readAsArrayBuffer(file);
+        });
+    }
+
     async function procesarArchivos() {
-        const pdfFile = document.getElementById('pdfFile').files[0];
-        const excelFile = document.getElementById('excelFile').files[0];
+        const palletFile = document.getElementById('palletFile').files[0];
+        const maestroFile = document.getElementById('maestroFile').files[0];
         const btn = document.getElementById('btnProcess');
 
-        if (!pdfFile || !excelFile) {
-            return alert("Por favor, seleccioná ambos archivos (PDF y Excel) antes de procesar.");
+        if (!palletFile || !maestroFile) {
+            return alert("Por favor, seleccioná ambos archivos Excel antes de procesar.");
         }
 
         btn.innerText = "⏳ Procesando... Por favor esperá";
@@ -103,102 +119,71 @@
         btn.disabled = true;
         
         try {
-            // ==========================================
-            // PASO 1: EXTRAER LOTES DEL PDF (Lógica Flexibilizada)
-            // ==========================================
             lotesEnPallet.clear();
-            const arrayBufferPdf = await pdfFile.arrayBuffer();
-            const pdf = await pdfjsLib.getDocument({data: arrayBufferPdf}).promise;
+            datosFinales = [];
+
+            // ==========================================
+            // PASO 1: LEER ARCHIVO DEL PALLET (Columna F)
+            // ==========================================
+            const wbPallet = await leerExcelAsincrono(palletFile);
+            const nombreHojaPallet = wbPallet.SheetNames[0]; // Toma la primera hoja por defecto
             
-            for (let i = 1; i <= pdf.numPages; i++) {
-                const page = await pdf.getPage(i);
-                const content = await page.getTextContent();
+            // Leemos forzando que las cabeceras sean las letras de las columnas
+            const excelDataPallet = XLSX.utils.sheet_to_json(wbPallet.Sheets[nombreHojaPallet], { header: "A", defval: "" });
+            
+            // Empezamos en 1 para saltear la fila de títulos si la hay
+            for (let i = 1; i < excelDataPallet.length; i++) {
+                // Tomamos la Columna F y aplicamos la aplanadora de espacios invisibles
+                let loteEncontrado = String(excelDataPallet[i]["F"] || "").replace(/\s+/g, '');
                 
-                let lastY = -1;
-                let currentLine = "";
-                
-                content.items.forEach(item => {
-                    if (lastY !== -1 && Math.abs(lastY - item.transform[5]) > 5) {
-                        procesarLineaPDF(currentLine);
-                        currentLine = "";
-                    }
-                    currentLine += item.str + " ";
-                    lastY = item.transform[5];
-                });
-                if (currentLine) procesarLineaPDF(currentLine);
+                // Evitamos celdas vacías o con textos muy cortos
+                if (loteEncontrado.length > 3 && loteEncontrado !== "Nºdelote/serie") {
+                    lotesEnPallet.add(loteEncontrado);
+                }
             }
 
             if (lotesEnPallet.size === 0) {
-                throw new Error("No se pudo detectar ningún lote válido en el PDF.");
+                throw new Error("No se pudo detectar ningún lote válido en la columna F del archivo del Pallet.");
             }
 
             // ==========================================
-            // PASO 2: LEER EXCEL (Limpieza extrema de celdas)
+            // PASO 2: LEER MAESTRO JDE (Columnas D, E, M, N)
             // ==========================================
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                const data = new Uint8Array(e.target.result);
-                const workbook = XLSX.read(data, {type: 'array'});
+            const wbMaestro = await leerExcelAsincrono(maestroFile);
+            const sheetNameMaestro = 'legacy vStockPT';
+            
+            if (!wbMaestro.Sheets[sheetNameMaestro]) {
+                throw new Error(`No se encontró la pestaña '${sheetNameMaestro}' en el Maestro JDE.`);
+            }
+            
+            const excelDataMaestro = XLSX.utils.sheet_to_json(wbMaestro.Sheets[sheetNameMaestro], { header: "A", defval: "" });
+            
+            for (let i = 1; i < excelDataMaestro.length; i++) {
+                let row = excelDataMaestro[i];
                 
-                const sheetName = 'legacy vStockPT';
-                if (!workbook.Sheets[sheetName]) {
-                    restaurarBoton(btn);
-                    return alert(`No se encontró la pestaña '${sheetName}' en el Excel.`);
+                // Limpiamos los espacios del maestro para que el match sea perfecto
+                let loteMaestro = String(row["D"] || "").replace(/\s+/g, '');
+                let status = String(row["E"] || "").trim();
+                let articulo = String(row["M"] || "").trim();
+                let descripcion = String(row["N"] || "").trim();
+                
+                // Cruce de datos
+                if (lotesEnPallet.has(loteMaestro) && status !== "") {
+                    datosFinales.push({
+                        "Lote": loteMaestro,
+                        "LotStatus": status,
+                        "Articulo": articulo,
+                        "Descripcion": descripcion
+                    });
                 }
-                
-                const excelData = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: "A", defval: "" });
-                
-                datosFinales = [];
-                
-                for (let i = 1; i < excelData.length; i++) {
-                    let row = excelData[i];
-                    
-                    // .replace(/\s+/g, '') destruye absolutamente todos los espacios invisibles de JDE
-                    let loteExcel = String(row["D"] || "").replace(/\s+/g, '');
-                    let status = String(row["E"] || "").trim();
-                    let articulo = String(row["M"] || "").trim();
-                    let descripcion = String(row["N"] || "").trim();
-                    
-                    if (lotesEnPallet.has(loteExcel) && status !== "") {
-                        datosFinales.push({
-                            "Lote": loteExcel,
-                            "LotStatus": status,
-                            "Articulo": articulo,
-                            "Descripcion": descripcion
-                        });
-                    }
-                }
-                
-                renderizarUI();
-                restaurarBoton(btn);
-            };
-            reader.readAsArrayBuffer(excelFile);
+            }
+            
+            renderizarUI();
+            restaurarBoton(btn);
 
         } catch (error) {
             restaurarBoton(btn);
             alert("Ocurrió un error: " + error.message);
-        }
-    }
-
-    function procesarLineaPDF(line) {
-        // Ignoramos encabezados directamente
-        if (line.includes("Cod. Art") || line.includes("Nro Pallet")) return;
-
-        // Dividimos la línea entera utilizando cualquier cantidad de espacios como separador
-        const tokens = line.trim().split(/\s+/);
-        
-        // Verificamos que sea una fila con datos suficientes (asumiendo que tiene al menos 5 columnas)
-        if (tokens.length >= 5) {
-            // El lote siempre está 4 posiciones hacia atrás contando desde el final (Lote, Ubicación, Cantidad, U/M)
-            const loteCandidato = tokens[tokens.length - 4];
-            
-            // Le quitamos cualquier espacio invisible al lote encontrado en el PDF por si acaso
-            const loteLimpio = loteCandidato.replace(/\s+/g, '');
-            
-            // Validamos que tenga un tamaño lógico para ser un lote (evita capturar basuras cortas)
-            if (loteLimpio.length > 3) {
-                lotesEnPallet.add(loteLimpio);
-            }
         }
     }
 
@@ -229,7 +214,7 @@
             });
         }
 
-        document.getElementById('lblTotalPDF').innerText = lotesEnPallet.size;
+        document.getElementById('lblTotalPallet').innerText = lotesEnPallet.size;
         document.getElementById('lblTotalObs').innerText = datosFinales.length;
         document.getElementById('resumenTotales').style.display = "flex";
         document.getElementById('resArea').style.display = "block";
