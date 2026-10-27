@@ -14,7 +14,7 @@
         .box.dragover { background-color: #eaf2f8; border-color: var(--info); }
         
         .controls { display: flex; gap: 15px; margin-bottom: 15px; justify-content: center; align-items: center; flex-wrap: wrap; }
-        select, input[type="file"] { padding: 10px; font-size: 1em; border: 1px solid #ccc; border-radius: 4px; }
+        input[type="file"] { padding: 10px; font-size: 1em; border: 1px solid #ccc; border-radius: 4px; background: white; }
         
         .btn { border: none; padding: 12px 20px; border-radius: 5px; font-weight: bold; cursor: pointer; font-size: 1em; color: white; transition: 0.2s; }
         .btn:hover { opacity: 0.9; }
@@ -23,6 +23,11 @@
         .btn-copy-all { background: var(--purple); color: #fff; }
         .btn-export { background: var(--info); }
         
+        /* Pestañas de reportes */
+        .tabs-container { display: none; gap: 5px; margin-bottom: 15px; flex-wrap: wrap; border-bottom: 2px solid #ddd; padding-bottom: 10px; }
+        .tab-btn { background: #e0e0e0; border: none; padding: 8px 15px; border-radius: 4px 4px 0 0; cursor: pointer; font-weight: bold; color: #555; }
+        .tab-btn.active { background: var(--primary); color: white; }
+
         .resumen-totales { display: none; justify-content: space-around; background: #ebf2f7; padding: 15px; border-radius: 5px; margin-bottom: 15px; border: 1px solid #d1d9e0; font-size: 1.2em; font-weight: bold; }
         .total-ca { color: var(--info); }
         .total-un { color: var(--purple); }
@@ -40,23 +45,20 @@
 <body>
 
 <div class="container">
-    <h2 class="header-title">📊 Extractor Unificado JDE a Excel</h2>
+    <h2 class="header-title">📊 Extractor Unificado JDE a Excel (Multireporte)</h2>
     
     <div class="box" id="dropZone">
         <div class="controls">
-            <label style="font-weight: bold; color: #333;">1. Tipo de Reporte:</label>
-            <select id="tipoReporte">
-                <option value="estandar">Surtido Estándar</option>
-                <option value="multiorden">Surtido Multiorden</option>
-            </select>
-            
-            <label style="font-weight: bold; color: #333; margin-left: 10px;">2. Archivo:</label>
-            <input type="file" id="surtidoFile" accept=".xls,.xlsx,.htm,.html">
+            <label style="font-weight: bold; color: #333;">Seleccionar Reportes (Estándar o Multiorden):</label>
+            <input type="file" id="surtidoFiles" multiple accept=".xls,.xlsx,.htm,.html">
         </div>
-        <p style="color: #666; margin-top: 0; margin-bottom: 15px; font-size: 0.9em;">(Podés arrastrar y soltar el archivo acá dentro)</p>
+        <p style="color: #666; margin-top: 0; margin-bottom: 15px; font-size: 0.9em;">(Podés arrastrar y soltar varios archivos acá dentro)</p>
 
-        <button class="btn btn-process" onclick="procesarReporte()">⚡ PROCESAR DATOS</button>
+        <button class="btn btn-process" onclick="procesarReportes()">⚡ PROCESAR TODOS LOS REPORTES</button>
     </div>
+
+    <!-- Barra de pestañas para alternar entre reportes -->
+    <div class="tabs-container" id="tabsContainer"></div>
 
     <div class="resumen-totales" id="resumenTotales">
         <div class="total-ca">TOTAL CA: <span id="lblTotalCA">0</span></div>
@@ -88,12 +90,11 @@
 </div>
 
 <script>
-    let datosFinales = [];
-    let totalCajas = 0;
-    let totalUnidades = 0;
+    let reportesCargados = []; // Almacenará los datos de cada archivo procesado
+    let indiceActivo = 0;
 
     const dropZone = document.getElementById('dropZone');
-    const fileInput = document.getElementById('surtidoFile');
+    const fileInput = document.getElementById('surtidoFiles');
 
     dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
     dropZone.addEventListener('dragleave', () => { dropZone.classList.remove('dragover'); });
@@ -112,13 +113,11 @@
     function calcularCancha(ubicacion) {
         if (!ubicacion) return "";
         let u = ubicacion.replace(/\./g, '').trim().toUpperCase();
-        
         if (u.startsWith("100")) return "DEPO";
         if (u.startsWith("200M") || u.startsWith("200L")) return "CAVA";
         if (u.startsWith("200")) return "ANEXO";
         if (u.startsWith("400V")) return "VAGONES";
         if (u.startsWith("400Q")) return "EXCAVA";
-        
         return ""; 
     }
 
@@ -134,151 +133,248 @@
         return isNaN(num) ? 0 : num;
     }
 
-    function procesarReporte() {
-        const file = fileInput.files[0];
-        const tipo = document.getElementById('tipoReporte').value;
-        if(!file) return alert("Por favor, seleccioná el archivo.");
+    function detectarTipo(docText) {
+        let upper = docText.toUpperCase();
+        if (upper.includes("PALLET HOMOGENEO") || upper.includes("PALLET MIXTO")) {
+            return "estandar";
+        }
+        return "multiorden";
+    }
 
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(e.target.result, "text/html");
-            const rows = Array.from(doc.querySelectorAll('tr'));
-            
-            let datosTemporales = []; 
-            totalCajas = 0;
-            totalUnidades = 0;
-            let cargaNro = "S/C";
-            
-            if (tipo === 'estandar') {
-                let tipoSeccion = "";
-                rows.forEach(tr => {
-                    const text = tr.innerText.toUpperCase();
-                    if(text.includes("CARGA:")) { const m = text.match(/CARGA:\s*(\d+)/); if(m) cargaNro = m[1]; }
-                    if(text.includes("PALLET HOMOGENEO")) tipoSeccion = "pallet completo";
-                    if(text.includes("PALLET MIXTO")) tipoSeccion = "picking";
+    function procesarReportes() {
+        const files = fileInput.files;
+        if(!files || files.length === 0) return alert("Por favor, seleccioná al menos un archivo.");
 
-                    const c = Array.from(tr.cells).map(td => td.innerText.trim());
-                    if(c.length >= 8 && c[0].includes(".") && !isNaN(parseInt(c[1]))) {
-                        let ubicacionRaw = c[0];
-                        let unidadMedida = c.slice(7).join(" ").toUpperCase().includes("CA") ? "CA" : "UN";
-                        let cantidad = parseInt(c[8]) || 0;
-                        if (unidadMedida === 'CA') totalCajas += cantidad; else totalUnidades += cantidad;
+        reportesCargados = [];
+        let archivosProcesados = 0;
 
-                        datosTemporales.push({
-                            "Carga": cargaNro, "ART": c[1], "Descripción": c[4] || "", "PM/PH": tipoSeccion,
-                            "Desc UM": unidadMedida, "Cantidad": cantidad,
-                            "Ubicacion": formatearUbicacion(ubicacionRaw), "Cancha": calcularCancha(ubicacionRaw)
-                        });
-                    }
-                });
-            } else if (tipo === 'multiorden') {
-                let contextoActual = {};
-                rows.forEach(tr => {
-                    let text = tr.innerText.trim();
-                    let cells = Array.from(tr.cells).map(td => td.innerText.trim());
-                    if (text.toUpperCase().includes("CARGA:")) { const m = text.match(/CARGA:\s*(\d+)/i); if (m) cargaNro = m[1]; }
-                    if (cells.length >= 8 && cells[0].includes('.')) contextoActual = { ubicacion: cells[0], articulo: cells[1], desc: cells[3] };
-                    if (text.toUpperCase().includes('TOTAL SURTIDO')) {
-                        let match = text.match(/TOTAL SURTIDO:?\s*([\d\.,]+)\s*([A-Za-z]+)/i);
-                        if (match && contextoActual.articulo) {
-                            let cant = parsearCantidad(match[1]);
-                            let um = match[2].toUpperCase();
-                            if (um === 'CA') totalCajas += cant; else totalUnidades += cant;
-                            datosTemporales.push({
-                                "Carga": cargaNro, "ART": contextoActual.articulo, "Descripción": contextoActual.desc,
-                                "PM/PH": "picking", "Desc UM": um, "Cantidad": cant,
-                                "Ubicacion": formatearUbicacion(contextoActual.ubicacion), "Cancha": calcularCancha(contextoActual.ubicacion)
-                            });
-                            contextoActual = {};
+        Array.from(files).forEach((file, idx) => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const htmlContent = e.target.result;
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(htmlContent, "text/html");
+                const rows = Array.from(doc.querySelectorAll('tr'));
+                
+                let tipo = detectarTipo(htmlContent);
+                let datosTemporales = []; 
+                let totalCajas = 0;
+                let totalUnidades = 0;
+                let cargaNro = "S/C";
+                
+                if (tipo === 'estandar') {
+                    let tipoSeccion = "picking";
+                    rows.forEach(tr => {
+                        const text = tr.innerText.toUpperCase();
+                        if(text.includes("CARGA:")) { const m = text.match(/CARGA:\s*(\d+)/); if(m) cargaNro = m[1]; }
+                        if(text.includes("PALLET HOMOGENEO")) tipoSeccion = "pallet completo";
+                        if(text.includes("PALLET MIXTO")) tipoSeccion = "picking";
+
+                        const c = Array.from(tr.cells).map(td => td.innerText.trim());
+                        if (c.length >= 6) {
+                            let textRow = c.join(" ").toUpperCase();
+                            if ((textRow.includes(" CA") || textRow.includes(" UN")) && !textRow.includes("TOTAL") && !textRow.includes("CANTIDAD")) {
+                                let ubicacionRaw = "";
+                                let art = "";
+                                let desc = "";
+                                let unidadMedida = textRow.includes(" CA") ? "CA" : "UN";
+
+                                // Identificar si tiene ubicación o es N/S (sin ubicación)
+                                if (c[0] && (c[0].includes(".") || (c[0].length > 5 && !isNaN(c[0][0])))) {
+                                    ubicacionRaw = c[0];
+                                    art = c[1] || "";
+                                    desc = c[4] || c[3] || "";
+                                } else {
+                                    // Línea no surtida (N/S) o sin ubicación explícita
+                                    ubicacionRaw = "";
+                                    let artCandidate = c.find(cell => /^\d{5,}$/.test(cell));
+                                    art = artCandidate || c[1] || c[0] || "";
+                                    desc = c.find(cell => cell.length > 10 && !cell.includes("CA") && !cell.includes("UN")) || c[4] || "";
+                                }
+
+                                // Extraer cantidad
+                                let cantStr = "0";
+                                for (let i = 0; i < c.length; i++) {
+                                    if (c[i].toUpperCase().includes("CA") || c[i].toUpperCase().includes("UN")) {
+                                        let m = c[i].match(/([\d\.,]+)\s*(CA|UN)/i);
+                                        if (m) {
+                                            cantStr = m[1];
+                                        } else if (i > 0) {
+                                            cantStr = c[i-1];
+                                        }
+                                        break;
+                                    }
+                                }
+                                let cantidad = parsearCantidad(cantStr);
+
+                                if (art && cantidad > 0) {
+                                    if (unidadMedida === 'CA') totalCajas += cantidad; else totalUnidades += cantidad;
+                                    datosTemporales.push({
+                                        "Carga": cargaNro, "ART": art, "Descripción": desc, "PM/PH": tipoSeccion,
+                                        "Desc UM": unidadMedida, "Cantidad": cantidad,
+                                        "Ubicacion": formatearUbicacion(ubicacionRaw), "Cancha": calcularCancha(ubicacionRaw)
+                                    });
+                                }
+                            }
                         }
-                    }
-                });
-            }
+                    });
+                } else if (tipo === 'multiorden') {
+                    let contextoActual = {};
+                    rows.forEach(tr => {
+                        let text = tr.innerText.trim();
+                        let cells = Array.from(tr.cells).map(td => td.innerText.trim());
+                        if (text.toUpperCase().includes("CARGA:")) { const m = text.match(/CARGA:\s*(\d+)/i); if (m) cargaNro = m[1]; }
+                        if (cells.length >= 8 && cells[0].includes('.')) contextoActual = { ubicacion: cells[0], articulo: cells[1], desc: cells[3] };
+                        
+                        // Capturar tanto TOTAL SURTIDO como líneas N/S
+                        if (text.toUpperCase().includes('TOTAL SURTIDO') || text.toUpperCase().includes('N/S')) {
+                            let match = text.match(/([\d\.,]+)\s*(CA|UN)/i);
+                            if (match && contextoActual.articulo) {
+                                let cant = parsearCantidad(match[1]);
+                                let um = match[2].toUpperCase();
+                                if (um === 'CA') totalCajas += cant; else totalUnidades += cant;
+                                datosTemporales.push({
+                                    "Carga": cargaNro, "ART": contextoActual.articulo, "Descripción": contextoActual.desc,
+                                    "PM/PH": "picking", "Desc UM": um, "Cantidad": cant,
+                                    "Ubicacion": formatearUbicacion(contextoActual.ubicacion), "Cancha": calcularCancha(contextoActual.ubicacion)
+                                });
+                            }
+                        }
+                    });
+                }
 
-            // Unificación inteligente de Picking
-            datosFinales = [];
-            datosTemporales.forEach(row => {
-                if (row["PM/PH"] === "picking") {
-                    let existente = datosFinales.find(r => 
-                        r["PM/PH"] === "picking" && 
-                        r["ART"] === row["ART"] && 
-                        r["Desc UM"] === row["Desc UM"] && 
-                        r["Ubicacion"] === row["Ubicacion"]
-                    );
-                    if (existente) {
-                        existente["Cantidad"] += row["Cantidad"];
+                // Unificación de picking
+                let datosFinales = [];
+                datosTemporales.forEach(row => {
+                    if (row["PM/PH"] === "picking") {
+                        let existente = datosFinales.find(r => 
+                            r["PM/PH"] === "picking" && 
+                            r["ART"] === row["ART"] && 
+                            r["Desc UM"] === row["Desc UM"] && 
+                            r["Ubicacion"] === row["Ubicacion"]
+                        );
+                        if (existente) {
+                            existente["Cantidad"] += row["Cantidad"];
+                        } else {
+                            datosFinales.push(row);
+                        }
                     } else {
                         datosFinales.push(row);
                     }
-                } else {
-                    datosFinales.push(row);
+                });
+
+                reportesCargados.push({
+                    nombreArchivo: file.name,
+                    carga: cargaNro,
+                    datos: datosFinales,
+                    totalCA: totalCajas,
+                    totalUN: totalUnidades
+                });
+
+                archivosProcesados++;
+                if (archivosProcesados === files.length) {
+                    // Agregar pestaña de Consolidado si hay más de 1 archivo
+                    if (reportesCargados.length > 1) {
+                        let datosConsolidados = [];
+                        let totalCaCons = 0;
+                        let totalUnCons = 0;
+                        reportesCargados.forEach(rep => {
+                            rep.datos.forEach(d => datosConsolidados.push({...d}));
+                            totalCaCons += rep.totalCA;
+                            totalUnCons += rep.totalUN;
+                        });
+                        reportesCargados.push({
+                            nombreArchivo: "Consolidado General",
+                            carga: "TODAS",
+                            datos: datosConsolidados,
+                            totalCA: totalCaCons,
+                            totalUN: totalUnCons
+                        });
+                    }
+
+                    indiceActivo = 0;
+                    renderizarTabs();
+                    renderizarUI();
                 }
-            });
+            };
+            reader.readAsText(file, "ISO-8859-1");
+        });
+    }
 
-            if(datosFinales.length === 0) {
-                alert("No se encontraron datos válidos. Verificá que el archivo coincida con el tipo de reporte seleccionado.");
-                return;
-            }
+    function renderizarTabs() {
+        const tabsContainer = document.getElementById('tabsContainer');
+        tabsContainer.innerHTML = "";
+        tabsContainer.style.display = "flex";
 
-            renderizarUI();
-        };
-        reader.readAsText(file, "ISO-8859-1"); 
+        reportesCargados.forEach((rep, idx) => {
+            const btn = document.createElement('button');
+            btn.className = `tab-btn ${idx === indiceActivo ? 'active' : ''}`;
+            btn.innerText = `${rep.nombreArchivo} (Carga: ${rep.carga})`;
+            btn.onclick = () => {
+                indiceActivo = idx;
+                document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                renderizarUI();
+            };
+            tabsContainer.appendChild(btn);
+        });
     }
 
     function renderizarUI() {
+        if (reportesCargados.length === 0) return;
+        const actual = reportesCargados[indiceActivo];
+
         const tbody = document.getElementById('tablaBody');
         tbody.innerHTML = "";
-        datosFinales.forEach(fila => {
+        
+        actual.datos.forEach(fila => {
             const tr = document.createElement('tr');
-            tr.innerHTML = `<td>${fila["Carga"]}</td><td><b>${fila["ART"]}</b></td><td>${fila["Descripción"]}</td><td><span style="color: ${fila["PM/PH"] === 'picking' ? '#e67e22' : (fila["PM/PH"] === 'pallet completo' ? '#27ae60' : '#8e44ad')}; font-weight:bold;">${fila["PM/PH"]}</span></td><td><b>${fila["Desc UM"]}</b></td><td class="num-cell">${fila["Cantidad"]}</td>`;
+            let colorPM = fila["PM/PH"] === 'picking' ? '#e67e22' : (fila["PM/PH"] === 'pallet completo' ? '#27ae60' : '#8e44ad');
+            tr.innerHTML = `<td>${fila["Carga"]}</td><td><b>${fila["ART"]}</b></td><td>${fila["Descripción"]}</td><td><span style="color: ${colorPM}; font-weight:bold;">${fila["PM/PH"]}</span></td><td><b>${fila["Desc UM"]}</b></td><td class="num-cell">${fila["Cantidad"]}</td>`;
             tbody.appendChild(tr);
         });
-        document.getElementById('lblTotalCA').innerText = totalCajas.toLocaleString('es-AR');
-        document.getElementById('lblTotalUN').innerText = totalUnidades.toLocaleString('es-AR');
+
+        document.getElementById('lblTotalCA').innerText = actual.totalCA.toLocaleString('es-AR');
+        document.getElementById('lblTotalUN').innerText = actual.totalUN.toLocaleString('es-AR');
         document.getElementById('resumenTotales').style.display = "flex";
         document.getElementById('resArea').style.display = "block";
         document.getElementById('actionBar').style.display = "flex";
     }
 
     function copiarAlPortapapeles() {
-        if(datosFinales.length === 0) return;
+        if(reportesCargados.length === 0) return;
+        let actual = reportesCargados[indiceActivo];
         let textoCopiar = ""; 
-        datosFinales.forEach(f => {
+        actual.datos.forEach(f => {
             textoCopiar += `${f["Carga"]}\t${f["ART"]}\t${f["Descripción"]}\t${f["PM/PH"]}\t${f["Desc UM"]}\t${f["Cantidad"]}\n`;
         });
         navigator.clipboard.writeText(textoCopiar).then(() => alert("¡Datos copiados! (6 columnas)."));
     }
 
     function copiarConUbicacion() {
-        if(datosFinales.length === 0) return;
-        
-        // CORRECCIÓN: Agregada la fila de encabezados para el portapapeles
+        if(reportesCargados.length === 0) return;
+        let actual = reportesCargados[indiceActivo];
         let textoCopiar = "Carga\tART\tDescripción\tPM/PH\tDesc UM\tCantidad\tUbicacion\tCancha\n"; 
-        
-        datosFinales.forEach(f => {
+        actual.datos.forEach(f => {
             textoCopiar += `${f["Carga"]}\t${f["ART"]}\t${f["Descripción"]}\t${f["PM/PH"]}\t${f["Desc UM"]}\t${f["Cantidad"]}\t${f["Ubicacion"]}\t${f["Cancha"]}\n`;
         });
-        navigator.clipboard.writeText(textoCopiar).then(() => alert("¡Datos copiados con encabezados! (8 columnas)."));
+        navigator.clipboard.writeText(textoCopiar).then(() => alert("¡Datos copiados con ubicación y encabezados! (8 columnas)."));
     }
 
     function exportarExcel() {
-        if(datosFinales.length === 0) return;
+        if(reportesCargados.length === 0) return;
+        let actual = reportesCargados[indiceActivo];
         
-        let cargaName = datosFinales[0]["Carga"] || "SC";
-        const worksheet = XLSX.utils.json_to_sheet(datosFinales);
-        
+        const worksheet = XLSX.utils.json_to_sheet(actual.datos);
         worksheet['!cols'] = [
             { wch: 10 }, { wch: 10 }, { wch: 40 }, { wch: 15 }, { wch: 10 }, { wch: 10 }, { wch: 12 }, { wch: 12 }
         ];
 
         const workbook = XLSX.utils.book_new();
-        
-        // CORRECCIÓN: Nombre de la pestaña (hoja) dinámico con el número de carga
-        let nombrePestana = `Carga_${cargaName}`.substring(0, 31); 
+        let nombrePestana = `Carga_${actual.carga}`.substring(0, 31); 
         XLSX.utils.book_append_sheet(workbook, worksheet, nombrePestana);
         
-        XLSX.writeFile(workbook, `Surtido_${cargaName}.xlsx`);
+        XLSX.writeFile(workbook, `Surtido_${actual.carga}.xlsx`);
     }
 </script>
 </body>
