@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Extracción JDE Unificada - M2 Consultora</title>
+    <title>Extractor JDE a Excel (Multireporte) - M2 Consultora</title>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
     <style>
         :root { --primary: #2c3e50; --success: #27ae60; --info: #2980b9; --warning: #e67e22; --purple: #8e44ad; }
@@ -222,59 +222,82 @@
                 let totalUnidades = 0;
                 let cargaNro = "S/C";
                 let tipoSeccion = "picking";
+                let esAbastecimiento = false;
 
                 rows.forEach(tr => {
                     const text = tr.innerText.toUpperCase();
-                    if(text.includes("CARGA:")) { const m = text.match(/CARGA:\s*(\d+)/); if(m) cargaNro = m[1]; }
-                    if(text.includes("PALLET HOMOGENEO")) tipoSeccion = "pallet completo";
-                    if(text.includes("PALLET MIXTO")) tipoSeccion = "picking";
+                    
+                    if (text.includes("ABASTECIMIENTO")) {
+                        esAbastecimiento = true;
+                    }
+                    if (text.includes("CLIENTES:") || text.includes("ÁREA SURTIDO") || text.includes("PALLET HOMOGENEO") || text.includes("PALLET MIXTO")) {
+                        if (!text.includes("ABASTECIMIENTO")) {
+                            esAbastecimiento = false;
+                        }
+                    }
+
+                    if (text.includes("CARGA:")) { const m = text.match(/CARGA:\s*(\d+)/); if(m) cargaNro = m[1]; }
+                    if (text.includes("PALLET HOMOGENEO")) tipoSeccion = "pallet completo";
+                    if (text.includes("PALLET MIXTO")) tipoSeccion = "picking";
+
+                    if (esAbastecimiento) return;
 
                     const c = Array.from(tr.cells).map(td => td.innerText.trim());
-                    if (c.length >= 8 && c[0].includes(".")) {
-                        let ubicacionRaw = c[0];
-                        let articulo = c[1];
-                        let descripcion = c[4] || "";
-                        
-                        let cantidad = 0;
-                        let unidadMedida = "CA";
+                    if (c.length >= 6) {
+                        let textRow = c.join(" ").toUpperCase();
+                        if ((textRow.includes(" CA") || textRow.includes(" UN")) && !textRow.includes("TOTAL") && !textRow.includes("CANTIDAD")) {
+                            let ubicacionRaw = "";
+                            let articulo = "";
+                            let descripcion = "";
+                            let unidadMedida = textRow.includes(" UN") ? "UN" : "CA";
 
-                        // Buscamos de forma segura la celda con CA o UN para evitar tomar la vida útil
-                        for (let i = 7; i < c.length; i++) {
-                            let cellText = c[i].toUpperCase();
-                            if (cellText.includes("CA") || cellText.includes("UN")) {
-                                unidadMedida = cellText.includes("UN") ? "UN" : "CA";
-                                let match = cellText.match(/([\d\.,]+)\s*(CA|UN)/i);
-                                if (match) {
-                                    cantidad = parsearCantidad(match[1]);
-                                } else if (i > 0) {
-                                    cantidad = parsearCantidad(c[i-1]);
-                                }
-                                break;
+                            if (c[0] && (c[0].includes(".") || (c[0].length > 4 && !isNaN(c[0][0])))) {
+                                ubicacionRaw = c[0];
+                                articulo = c[1] || "";
+                                descripcion = c[4] || c[3] || "";
+                            } else {
+                                ubicacionRaw = "";
+                                let artCandidate = c.find(cell => /^\d{5,}$/.test(cell));
+                                articulo = artCandidate || c[1] || c[0] || "";
+                                descripcion = c.find(cell => cell.length > 8 && !cell.includes("CA") && !cell.includes("UN")) || c[4] || "";
                             }
-                        }
 
-                        if (cantidad === 0 && c[8]) {
-                            cantidad = parsearCantidad(c[8]);
-                            unidadMedida = c.slice(7, 10).join(" ").toUpperCase().includes("UN") ? "UN" : "CA";
-                        }
+                            let cantidad = 0;
+                            for (let i = 0; i < c.length; i++) {
+                                let cellText = c[i].toUpperCase();
+                                if (cellText.includes("CA") || cellText.includes("UN")) {
+                                    let match = cellText.match(/([\d\.,]+)\s*(CA|UN)/i);
+                                    if (match) {
+                                        cantidad = parsearCantidad(match[1]);
+                                    } else if (i > 0) {
+                                        cantidad = parsearCantidad(c[i-1]);
+                                    }
+                                    break;
+                                }
+                            }
 
-                        if (articulo && !isNaN(articulo) && cantidad > 0) {
-                            if (unidadMedida === 'CA') totalCajas += cantidad; else totalUnidades += cantidad;
-                            datosTemporales.push({
-                                "Carga": cargaNro, "ART": articulo, "Descripción": descripcion, "PM/PH": tipoSeccion,
-                                "Desc UM": unidadMedida, "Cantidad": cantidad,
-                                "Ubicacion": formatearUbicacion(ubicacionRaw), "Cancha": calcularCancha(ubicacionRaw)
-                            });
+                            if (cantidad === 0 && c.length >= 9) {
+                                cantidad = parsearCantidad(c[8]);
+                            }
+
+                            if (articulo && cantidad > 0) {
+                                if (unidadMedida === 'CA') totalCajas += cantidad; else totalUnidades += cantidad;
+                                datosTemporales.push({
+                                    "Carga": cargaNro, "ART": articulo, "Descripción": descripcion, "PM/PH": tipoSeccion,
+                                    "Desc UM": unidadMedida, "Cantidad": cantidad,
+                                    "Ubicacion": formatearUbicacion(ubicacionRaw), "Cancha": calcularCancha(ubicacionRaw)
+                                });
+                            }
                         }
                     }
                 });
 
-                finalizarProcesamientoArchivo(`${file.name} (Estándar)`, cargaNro, datosTemporales, totalCajas, totalUnidades, totalFiles, ++procesadosCount);
+                finalizarProcesamientoArchivo(cargaNro, datosTemporales, totalCajas, totalUnidades, totalFiles, ++procesadosCount);
             };
             reader.readAsText(file, "ISO-8859-1");
         });
 
-        // Procesar Multiorden
+        // Procesar Multiorden (leyendo las líneas del detalle e ignorando Abastecimiento)
         archivosMultiAcumulados.forEach(file => {
             const reader = new FileReader();
             reader.onload = (e) => {
@@ -286,46 +309,83 @@
                 let totalCajas = 0;
                 let totalUnidades = 0;
                 let cargaNro = "S/C";
-                let contextoActual = {};
+                let esAbastecimiento = false;
 
                 rows.forEach(tr => {
                     let text = tr.innerText.trim();
-                    let cells = Array.from(tr.cells).map(td => td.innerText.trim());
-                    if (text.toUpperCase().includes("CARGA:")) { const m = text.match(/CARGA:\s*(\d+)/i); if (m) cargaNro = m[1]; }
-                    if (cells.length >= 8 && cells[0].includes('.')) {
-                        contextoActual = { ubicacion: cells[0], articulo: cells[1], desc: cells[3] };
-                    }
+                    let upperText = text.toUpperCase();
                     
-                    // Capturamos TOTAL SURTIDO o N/S asegurando que se sumen al detalle
-                    if (text.toUpperCase().includes('TOTAL SURTIDO') || text.toUpperCase().includes('N/S')) {
-                        let match = text.match(/([\d\.,]+)\s*(CA|UN)/i);
-                        if (match && contextoActual.articulo) {
-                            let cant = parsearCantidad(match[1]);
-                            let um = match[2].toUpperCase();
-                            if (um === 'CA') totalCajas += cant; else totalUnidades += cant;
-                            
-                            let esNS = text.toUpperCase().includes('N/S');
+                    if (upperText.includes("ABASTECIMIENTO")) {
+                        esAbastecimiento = true;
+                    }
+                    if (upperText.includes("CLIENTES:") || upperText.includes("ÁREA SURTIDO")) {
+                        esAbastecimiento = false;
+                    }
+
+                    if (esAbastecimiento) return;
+
+                    let cells = Array.from(tr.cells).map(td => td.innerText.trim());
+                    if (upperText.includes("CARGA:")) { const m = text.match(/CARGA:\s*(\d+)/i); if (m) cargaNro = m[1]; }
+                    
+                    // Detectar filas de detalle en multiorden (contienen ubicación con punto o estado N/S)
+                    let textRow = cells.join(" ").toUpperCase();
+                    if ((textRow.includes(" CA") || textRow.includes(" UN") || upperText.includes("N/S")) && !upperText.includes("TOTAL SURTIDO") && !upperText.includes("ARTÍCULO") && !upperText.includes("UBICACIÓN")) {
+                        let ubicacionRaw = "";
+                        let articulo = "";
+                        let descripcion = "";
+                        let unidadMedida = textRow.includes(" UN") ? "UN" : "CA";
+                        let esNS = upperText.includes("N/S");
+
+                        if (cells[0] && cells[0].includes('.')) {
+                            ubicacionRaw = cells[0];
+                            articulo = cells[1] || "";
+                            descripcion = cells[3] || cells[4] || "";
+                        } else {
+                            // Línea N/S o continuación sin ubicación explícita en columna 0
+                            let artCandidate = cells.find(cell => /^\d{5,}$/.test(cell));
+                            articulo = artCandidate || cells[1] || "";
+                            descripcion = cells.find(cell => cell.length > 8 && !cell.includes("CA") && !cell.includes("UN")) || "";
+                        }
+
+                        // Extraer la cantidad de la línea del detalle
+                        let cantidad = 0;
+                        for (let i = 0; i < cells.length; i++) {
+                            let cellText = cells[i].toUpperCase();
+                            if (cellText.includes("CA") || cellText.includes("UN") || cellText === "N/S") {
+                                let match = cellText.match(/([\d\.,]+)\s*(CA|UN)/i);
+                                if (match) {
+                                    cantidad = parsearCantidad(match[1]);
+                                } else if (i > 0) {
+                                    // Buscar número en la celda anterior si la unidad está sola
+                                    cantidad = parsearCantidad(cells[i-1]);
+                                }
+                                break;
+                            }
+                        }
+
+                        if (articulo && cantidad > 0) {
+                            if (unidadMedida === 'CA') totalCajas += cantidad; else totalUnidades += cantidad;
                             datosTemporales.push({
                                 "Carga": cargaNro, 
-                                "ART": contextoActual.articulo, 
-                                "Descripción": contextoActual.desc,
+                                "ART": articulo, 
+                                "Descripción": descripcion, 
                                 "PM/PH": "picking", 
-                                "Desc UM": um, 
-                                "Cantidad": cant,
-                                "Ubicacion": esNS ? "" : formatearUbicacion(contextoActual.ubicacion), 
-                                "Cancha": esNS ? "" : calcularCancha(contextoActual.ubicacion)
+                                "Desc UM": unidadMedida, 
+                                "Cantidad": cantidad,
+                                "Ubicacion": esNS ? "" : formatearUbicacion(ubicacionRaw), 
+                                "Cancha": esNS ? "" : calcularCancha(ubicacionRaw)
                             });
                         }
                     }
                 });
 
-                finalizarProcesamientoArchivo(`${file.name} (Multi)`, cargaNro, datosTemporales, totalCajas, totalUnidades, totalFiles, ++procesadosCount);
+                finalizarProcesamientoArchivo(cargaNro, datosTemporales, totalCajas, totalUnidades, totalFiles, ++procesadosCount);
             };
             reader.readAsText(file, "ISO-8859-1");
         });
     }
 
-    function finalizarProcesamientoArchivo(nombreArchivo, cargaNro, datosTemporales, totalCajas, totalUnidades, totalFiles, procesadosCount) {
+    function finalizarProcesamientoArchivo(cargaNro, datosTemporales, totalCajas, totalUnidades, totalFiles, procesadosCount) {
         let datosFinales = [];
         datosTemporales.forEach(row => {
             if (row["PM/PH"] === "picking" && row["Ubicacion"] !== "") {
@@ -346,7 +406,6 @@
         });
 
         reportesCargados.push({
-            nombreArchivo: nombreArchivo,
             carga: cargaNro,
             datos: datosFinales,
             totalCA: totalCajas,
@@ -354,6 +413,18 @@
         });
 
         if (procesadosCount === totalFiles) {
+            // Ordenar reportes de mayor a menor número de carga
+            let consolidado = reportesCargados.find(r => r.carga === "TODAS");
+            let individuales = reportesCargados.filter(r => r !== consolidado);
+            
+            individuales.sort((a, b) => {
+                let numA = parseInt(a.carga) || 0;
+                let numB = parseInt(b.carga) || 0;
+                return numB - numA; // Mayor a menor
+            });
+
+            reportesCargados = individuales;
+
             if (reportesCargados.length > 1) {
                 let datosConsolidados = [];
                 let totalCaCons = 0;
@@ -364,7 +435,6 @@
                     totalUnCons += rep.totalUN;
                 });
                 reportesCargados.push({
-                    nombreArchivo: "Consolidado General",
                     carga: "TODAS",
                     datos: datosConsolidados,
                     totalCA: totalCaCons,
@@ -386,7 +456,8 @@
         reportesCargados.forEach((rep, idx) => {
             const btn = document.createElement('button');
             btn.className = `tab-btn ${idx === indiceActivo ? 'active' : ''}`;
-            btn.innerText = `${rep.nombreArchivo} (Carga: ${rep.carga})`;
+            // Formato de pestaña solicitado: "Carga XXXX" o "Consolidado General"
+            btn.innerText = rep.carga === "TODAS" ? "Consolidado General" : `Carga ${rep.carga}`;
             btn.onclick = () => {
                 indiceActivo = idx;
                 document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -448,10 +519,10 @@
         ];
 
         const workbook = XLSX.utils.book_new();
-        let nombrePestana = `Carga_${actual.carga}`.substring(0, 31); 
-        XLSX.utils.book_append_sheet(workbook, worksheet, nombrePestana);
+        let nombrePestana = actual.carga === "TODAS" ? "Consolidado" : `Carga_${actual.carga}`;
+        XLSX.utils.book_append_sheet(workbook, worksheet, nombrePestana.substring(0, 31));
         
-        XLSX.writeFile(workbook, `Surtido_${actual.carga}.xlsx`);
+        XLSX.writeFile(workbook, `Surtido_${nombrePestana}.xlsx`);
     }
 </script>
 </body>
