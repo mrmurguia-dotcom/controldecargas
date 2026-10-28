@@ -302,7 +302,7 @@
             reader.readAsText(file, "ISO-8859-1");
         });
 
-        // --- PROCESAMIENTO MULTIORDEN ROBUSTO (BÚSQUEDA DINÁMICA POR CELDA SIN DESFASAJE) ---
+        // --- PROCESAMIENTO MULTIORDEN ROBUSTO (CON DESCRIPCIÓN CORREGIDA) ---
         archivosMultiAcumulados.forEach(file => {
             const reader = new FileReader();
             reader.onload = (e) => {
@@ -336,7 +336,6 @@
                         if (m) cargaNro = m[1]; 
                     }
 
-                    // Buscar ubicación si alguna celda tiene formato de ubicación con punto (ej. 20.0L.003.0)
                     for (let cell of cells) {
                         if (/^\d{2}\.[0-9A-Z]+\.\d{3}\.\d$/i.test(cell) || (cell.includes('.') && cell.length >= 8 && /\d/.test(cell))) {
                             ultimaUbicacion = cell;
@@ -344,7 +343,6 @@
                         }
                     }
 
-                    // Si es una línea de detalle o línea N/S en multiorden
                     let rowJoined = cells.join(" ").toUpperCase();
                     if ((rowJoined.includes(" CA") || rowJoined.includes(" UN") || upperText.includes("N/S")) && 
                         !upperText.includes("TOTAL SURTIDO") && !upperText.includes("ARTÍCULO") && !upperText.includes("UBICACIÓN") && !upperText.includes("CANTIDAD POR UNIDAD")) {
@@ -354,27 +352,33 @@
                         let unidadMedida = rowJoined.includes(" UN") ? "UN" : "CA";
                         let esNS = upperText.includes("N/S");
 
-                        // Buscar el código de artículo (5 dígitos) en las celdas
                         for (let cell of cells) {
                             if (/^\d{5}$/.test(cell)) {
                                 articulo = cell;
                                 break;
                             }
                         }
-                        if (!articulo && cells.length > 1) {
+                        if (!articulo) {
                             let found = cells.find(c => /^\d{5,}$/.test(c));
                             if (found) articulo = found;
                         }
 
-                        // Buscar descripción (texto largo sin CA/UN/NS/números puros)
+                        // DESCRIPCIÓN CORREGIDA: Exige que sea un texto con espacios y sin guiones bajos (evita códigos de lote)
                         for (let cell of cells) {
-                            if (cell.length > 6 && !/^\d+$/.test(cell) && !cell.includes("CA") && !cell.includes("UN") && !cell.includes("N/S") && !cell.includes('.')) {
+                            if (cell.length > 5 && cell.includes(' ') && !cell.includes('_') && !/^\d+$/.test(cell) && !cell.includes('.')) {
                                 descripcion = cell;
                                 break;
                             }
                         }
+                        if (!descripcion) {
+                            for (let cell of cells) {
+                                if (cell.length > 5 && !cell.includes('_') && !/^\d+$/.test(cell) && !cell.includes('.')) {
+                                    descripcion = cell;
+                                    break;
+                                }
+                            }
+                        }
 
-                        // Extraer cantidad y unidad de medida
                         let cantidad = 0;
                         for (let i = 0; i < cells.length; i++) {
                             let cellText = cells[i].toUpperCase();
