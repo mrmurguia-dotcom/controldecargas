@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Extractor JDE a Excel (Multireporte) - M2 Consultora</title>
+    <title>Extractor JDE a Excel- M2 Consultora</title>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
     <style>
         :root { --primary: #2c3e50; --success: #27ae60; --info: #2980b9; --warning: #e67e22; --purple: #8e44ad; }
@@ -51,12 +51,12 @@
 <body>
 
 <div class="container">
-    <h2 class="header-title">📊 Extractor JDE a Excel</h2>
+    <h2 class="header-title">📊 Extractor de SUrtido JDE a Excel</h2>
     
     <div class="upload-grid">
         <!-- Bloque Estándar -->
         <div class="box">
-            <h3 style="margin-top:0; color: var(--primary);">📦 Surtido Estándar</h3>
+            <h3 style="margin-top:0; color: var(--primary);">📦 Surtido Estándar (el total SI suma lo N/S)</h3>
             <div class="controls">
                 <input type="file" id="filesEstandar" multiple accept=".xls,.xlsx,.htm,.html">
             </div>
@@ -66,7 +66,7 @@
 
         <!-- Bloque Multiorden -->
         <div class="box">
-            <h3 style="margin-top:0; color: var(--purple);">📑 Surtido Multiorden</h3>
+            <h3 style="margin-top:0; color: var(--purple);">📑 Surtido Multiorden (el total NO suma lo N/S)</h3>
             <div class="controls">
                 <input type="file" id="filesMulti" multiple accept=".xls,.xlsx,.htm,.html">
             </div>
