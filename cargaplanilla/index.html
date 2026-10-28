@@ -51,7 +51,7 @@
 <body>
 
 <div class="container">
-    <h2 class="header-title">📊 Extractor JDE a Excel</h2>
+    <h2 class="header-title">📊 Extractor JDE a Excel (Multireporte)</h2>
     
     <div class="upload-grid">
         <!-- Bloque Estándar -->
@@ -302,7 +302,7 @@
             reader.readAsText(file, "ISO-8859-1");
         });
 
-        // --- PROCESAMIENTO MULTIORDEN (LÓGICA BASE LIMPIA CON COMPENSACIÓN EXPLÍCITA N/S) ---
+        // --- PROCESAMIENTO MULTIORDEN (ESTRATEGIA DUAL: LÍNEAS NORMALES Y N/S SEPARADAS) ---
         archivosMultiAcumulados.forEach(file => {
             const reader = new FileReader();
             reader.onload = (e) => {
@@ -348,17 +348,15 @@
                     if ((rowJoined.includes(" CA") || rowJoined.includes(" UN") || upperText.includes("N/S")) && 
                         !upperText.includes("TOTAL SURTIDO") && !upperText.includes("ARTÍCULO") && !upperText.includes("UBICACIÓN") && !upperText.includes("CANTIDAD POR UNIDAD")) {
                         
-                        let articulo = "";
-                        let descripcion = "";
-                        let unidadMedida = "CA";
-                        let cantidad = 0;
                         let esNS = upperText.includes("N/S") || nonEmpties.includes("N/S");
 
                         if (esNS) {
-                            // Compensación exacta para línea N/S:
-                            // Ubicación, Cancha y Lote quedan en blanco, saltando limpiamente la estructura
-                            articulo = nonEmpties[0] || "";
-                            descripcion = nonEmpties[1] || "";
+                            // --- PASADA DEDICADA PARA LÍNEAS NO SURTIDAS (N/S) ---
+                            // Estructura fija: [0] Artículo, [1] Descripción, [5] Cantidad, [6] UM (aprox)
+                            let articulo = nonEmpties[0] || "";
+                            let descripcion = nonEmpties[1] || "";
+                            let unidadMedida = "CA";
+                            let cantidad = 0;
 
                             for (let i = 0; i < nonEmpties.length; i++) {
                                 let cText = nonEmpties[i].toUpperCase();
@@ -388,13 +386,18 @@
                                     "PM/PH": "picking", 
                                     "Desc UM": unidadMedida, 
                                     "Cantidad": cantidad,
-                                    "Ubicacion": "", // En blanco por ser N/S
-                                    "Cancha": ""     // En blanco por ser N/S
+                                    "Ubicacion": "", // En blanco por ser N/S[cite: 31]
+                                    "Cancha": "",    // En blanco por ser N/S[cite: 31]
+                                    "Lote": ""       // En blanco por ser N/S[cite: 31]
                                 });
                             }
                         } else {
-                            // Fila Normal Multiorden
-                            articulo = nonEmpties[1] || "";
+                            // --- PASADA DEDICADA PARA LÍNEAS NORMALES (SURTIDAS) ---
+                            let articulo = nonEmpties[1] || "";
+                            let descripcion = "";
+                            let unidadMedida = "CA";
+                            let cantidad = 0;
+
                             for (let cell of nonEmpties) {
                                 if (cell.length > 5 && cell.includes(' ') && !cell.includes('_') && !/^\d+$/.test(cell) && !cell.includes('.')) {
                                     descripcion = cell;
