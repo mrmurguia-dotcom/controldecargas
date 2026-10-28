@@ -243,7 +243,6 @@
                     if (esAbastecimiento) return;
 
                     const c = Array.from(tr.cells).map(td => td.innerText.trim());
-                    // Identificamos filas válidas de surtido estándar asegurando que tengan artículo
                     if (c.length >= 6) {
                         let textRow = c.join(" ").toUpperCase();
                         if ((textRow.includes(" CA") || textRow.includes(" UN")) && !textRow.includes("TOTAL") && !textRow.includes("CANTIDAD") && !textRow.includes("UBICACI")) {
@@ -263,11 +262,9 @@
                                 descripcion = c.find(cell => cell.length > 8 && !cell.includes("CA") && !cell.includes("UN")) || c[4] || "";
                             }
 
-                            // Extracción robusta de cantidad evitando cualquier porcentaje de vida útil
                             let cantidad = 0;
                             for (let i = 0; i < c.length; i++) {
                                 let cellText = c[i].toUpperCase();
-                                // Buscamos celdas que contengan explícitamente CA o UN acompañadas de números
                                 if (cellText.includes("CA") || cellText.includes("UN")) {
                                     let match = cellText.match(/([\d\.,]+)\s*(CA|UN)/i);
                                     if (match) {
@@ -280,7 +277,6 @@
                             }
 
                             if (cantidad === 0) {
-                                // Fallback seguro buscando celdas numéricas enteras (evitando decimales largos de vida útil)
                                 for (let cell of c) {
                                     if (/^\d+$/.test(cell)) {
                                         let val = parseInt(cell);
@@ -306,7 +302,7 @@
             reader.readAsText(file, "ISO-8859-1");
         });
 
-        // --- PROCESAMIENTO MULTIORDEN ---
+        // --- PROCESAMIENTO MULTIORDEN ROBUSTO (BÚSQUEDA DINÁMICA POR CELDA SIN DESFASAJE) ---
         archivosMultiAcumulados.forEach(file => {
             const reader = new FileReader();
             reader.onload = (e) => {
@@ -319,7 +315,7 @@
                 let totalUnidades = 0;
                 let cargaNro = "S/C";
                 let esAbastecimiento = false;
-                let contextoUbicacion = "";
+                let ultimaUbicacion = "";
 
                 rows.forEach(tr => {
                     let text = tr.innerText.trim();
@@ -334,27 +330,51 @@
 
                     if (esAbastecimiento) return;
 
-                    let cells = Array.from(tr.cells).map(td => td.innerText.trim());
-                    if (upperText.includes("CARGA:")) { const m = text.match(/CARGA:\s*(\d+)/i); if (m) cargaNro = m[1]; }
-                    
-                    if (cells.length > 0 && cells[0].includes('.')) {
-                        contextoUbicacion = cells[0];
+                    let cells = Array.from(tr.cells).map(td => td.innerText.trim()).filter(Boolean);
+                    if (upperText.includes("CARGA:")) { 
+                        const m = text.match(/CARGA:\s*(\d+)/i); 
+                        if (m) cargaNro = m[1]; 
                     }
 
-                    // Lectura detallada de las líneas del surtido multiorden (incluyendo N/S)
-                    let textRow = cells.join(" ").toUpperCase();
-                    if ((textRow.includes(" CA") || textRow.includes(" UN") || upperText.includes("N/S")) && 
-                        !upperText.includes("TOTAL SURTIDO") && !upperText.includes("ARTÍCULO") && !upperText.includes("UBICACIÓN")) {
+                    // Buscar ubicación si alguna celda tiene formato de ubicación con punto (ej. 20.0L.003.0)
+                    for (let cell of cells) {
+                        if (/^\d{2}\.[0-9A-Z]+\.\d{3}\.\d$/i.test(cell) || (cell.includes('.') && cell.length >= 8 && /\d/.test(cell))) {
+                            ultimaUbicacion = cell;
+                            break;
+                        }
+                    }
+
+                    // Si es una línea de detalle o línea N/S en multiorden
+                    let rowJoined = cells.join(" ").toUpperCase();
+                    if ((rowJoined.includes(" CA") || rowJoined.includes(" UN") || upperText.includes("N/S")) && 
+                        !upperText.includes("TOTAL SURTIDO") && !upperText.includes("ARTÍCULO") && !upperText.includes("UBICACIÓN") && !upperText.includes("CANTIDAD POR UNIDAD")) {
                         
                         let articulo = "";
                         let descripcion = "";
-                        let unidadMedida = textRow.includes(" UN") ? "UN" : "CA";
+                        let unidadMedida = rowJoined.includes(" UN") ? "UN" : "CA";
                         let esNS = upperText.includes("N/S");
 
-                        let artCandidate = cells.find(cell => /^\d{5,}$/.test(cell));
-                        articulo = artCandidate || cells[1] || "";
-                        descripcion = cells.find(cell => cell.length > 6 && !cell.includes("CA") && !cell.includes("UN") && !cell.includes("N/S")) || "";
+                        // Buscar el código de artículo (5 dígitos) en las celdas
+                        for (let cell of cells) {
+                            if (/^\d{5}$/.test(cell)) {
+                                articulo = cell;
+                                break;
+                            }
+                        }
+                        if (!articulo && cells.length > 1) {
+                            let found = cells.find(c => /^\d{5,}$/.test(c));
+                            if (found) articulo = found;
+                        }
 
+                        // Buscar descripción (texto largo sin CA/UN/NS/números puros)
+                        for (let cell of cells) {
+                            if (cell.length > 6 && !/^\d+$/.test(cell) && !cell.includes("CA") && !cell.includes("UN") && !cell.includes("N/S") && !cell.includes('.')) {
+                                descripcion = cell;
+                                break;
+                            }
+                        }
+
+                        // Extraer cantidad y unidad de medida
                         let cantidad = 0;
                         for (let i = 0; i < cells.length; i++) {
                             let cellText = cells[i].toUpperCase();
@@ -362,8 +382,13 @@
                                 let match = cellText.match(/([\d\.,]+)\s*(CA|UN)/i);
                                 if (match) {
                                     cantidad = parsearCantidad(match[1]);
+                                    unidadMedida = cellText.includes("UN") ? "UN" : "CA";
                                 } else if (i > 0) {
-                                    cantidad = parsearCantidad(cells[i-1]);
+                                    let prevVal = parsearCantidad(cells[i-1]);
+                                    if (prevVal > 0) {
+                                        cantidad = prevVal;
+                                        if (cells[i].toUpperCase().includes("UN")) unidadMedida = "UN";
+                                    }
                                 }
                                 break;
                             }
@@ -371,6 +396,7 @@
 
                         if (articulo && cantidad > 0) {
                             if (unidadMedida === 'CA') totalCajas += cantidad; else totalUnidades += cantidad;
+                            let ubicacionFinal = esNS ? "" : ultimaUbicacion;
                             datosTemporales.push({
                                 "Carga": cargaNro, 
                                 "ART": articulo, 
@@ -378,8 +404,8 @@
                                 "PM/PH": "picking", 
                                 "Desc UM": unidadMedida, 
                                 "Cantidad": cantidad,
-                                "Ubicacion": esNS ? "" : formatearUbicacion(contextoUbicacion), 
-                                "Cancha": esNS ? "" : calcularCancha(contextoUbicacion)
+                                "Ubicacion": formatearUbicacion(ubicacionFinal), 
+                                "Cancha": calcularCancha(ubicacionFinal)
                             });
                         }
                     }
@@ -419,7 +445,6 @@
         });
 
         if (procesadosCount === totalFiles) {
-            // Ordenar de mayor a menor número de carga
             let consolidado = reportesCargados.find(r => r.carga === "TODAS");
             let individuales = reportesCargados.filter(r => r !== consolidado);
             
