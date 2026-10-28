@@ -51,7 +51,7 @@
 <body>
 
 <div class="container">
-    <h2 class="header-title">📊 Extractor JDE a Excel</h2>
+    <h2 class="header-title">📊 Extractor JDE a Excel (Multireporte)</h2>
     
     <div class="upload-grid">
         <!-- Bloque Estándar -->
@@ -302,7 +302,7 @@
             reader.readAsText(file, "ISO-8859-1");
         });
 
-        // --- PROCESAMIENTO MULTIORDEN (ENFOQUE DIRECTO LIMPIO) ---
+        // --- PROCESAMIENTO MULTIORDEN (CON MANEJO EXPLICITO DE N/S Y FILA NORMAL) ---
         archivosMultiAcumulados.forEach(file => {
             const reader = new FileReader();
             reader.onload = (e) => {
@@ -315,7 +315,7 @@
                 let totalUnidades = 0;
                 let cargaNro = "S/C";
                 let esAbastecimiento = false;
-                let ultimaUbicacion = "";
+                let contextoUbicacion = "";
 
                 rows.forEach(tr => {
                     let text = tr.innerText.trim();
@@ -336,9 +336,9 @@
                         if (m) cargaNro = m[1]; 
                     }
 
-                    // Actualizar ubicación si viene en la celda 0 con punto
+                    // Actualizar contexto de ubicación si la fila tiene una ubicación normal
                     if (cells.length > 0 && cells[0].includes('.')) {
-                        ultimaUbicacion = cells[0];
+                        contextoUbicacion = cells[0];
                     }
 
                     let rowJoined = cells.join(" ").toUpperCase();
@@ -350,71 +350,93 @@
                         let unidadMedida = rowJoined.includes(" UN") ? "UN" : "CA";
                         let esNS = upperText.includes("N/S");
 
-                        // ENFOQUE DIRECTO: Si cells[0] no tiene punto, es una línea N/S y cells[0] es directamente el Artículo
-                        if (esNS || !cells[0].includes('.')) {
-                            // Buscar el artículo de 5 dígitos (suele estar en cells[0] si es N/S)
-                            for (let cell of cells) {
-                                if (/^\d{5}$/.test(cell)) {
-                                    articulo = cell;
+                        if (esNS) {
+                            // Estructura N/S exacta provista por el usuario:
+                            // 0: Articulo, 1: Descripcion, 2: Cliente, 3: Orden, 4: Linea, 5: Cantidad, 6: UM, 7: N/S (aprox según celdas no vacías)
+                            let nonEmpties = Array.from(tr.cells).map(td => td.innerText.trim());
+                            // Filtramos celdas con contenido real
+                            let validCells = nonEmpties.filter(val => val !== "");
+                            
+                            articulo = validCells[0] || "";
+                            descripcion = validCells[1] || "";
+                            
+                            // Buscar cantidad y UM en las celdas restantes de la línea N/S
+                            let cantidad = 0;
+                            for (let cell of validCells) {
+                                let match = cell.match(/([\d\.,]+)\s*(CA|UN)/i);
+                                if (match) {
+                                    cantidad = parsearCantidad(match[1]);
+                                    unidadMedida = cell.toUpperCase().includes("UN") ? "UN" : "CA";
                                     break;
                                 }
                             }
-                            if (!articulo) articulo = cells[0];
-                        } else {
-                            // Línea normal con ubicación en cells[0] -> Artículo en cells[1]
-                            articulo = cells[1] || "";
-                        }
-
-                        // Buscar descripción (texto con espacios, sin guiones bajos, sin números puros)
-                        for (let cell of cells) {
-                            if (cell.length > 5 && cell.includes(' ') && !cell.includes('_') && !/^\d+$/.test(cell) && !cell.includes('.')) {
-                                descripcion = cell;
-                                break;
+                            if (cantidad === 0) {
+                                // Buscar número en penúltima o antepenúltima celda válida
+                                for (let i = validCells.length - 1; i >= 0; i--) {
+                                    let num = parsearCantidad(validCells[i]);
+                                    if (num > 0 && num < 100000 && !validCells[i].includes('.')) {
+                                        cantidad = num;
+                                        break;
+                                    }
+                                }
                             }
-                        }
-                        if (!descripcion) {
+
+                            if (articulo && cantidad > 0) {
+                                if (unidadMedida === 'CA') totalCajas += cantidad; else totalUnidades += cantidad;
+                                datosTemporales.push({
+                                    "Carga": cargaNro, 
+                                    "ART": articulo, 
+                                    "Descripción": descripcion, 
+                                    "PM/PH": "picking", 
+                                    "Desc UM": unidadMedida, 
+                                    "Cantidad": cantidad,
+                                    "Ubicacion": "", // En blanco por ser N/S
+                                    "Cancha": ""     // En blanco por ser N/S
+                                });
+                            }
+                        } else {
+                            // Fila Normal de Multiorden
+                            articulo = cells[1] || "";
                             for (let cell of cells) {
-                                if (cell.length > 5 && !cell.includes('_') && !/^\d+$/.test(cell) && !cell.includes('.')) {
+                                if (cell.length > 5 && cell.includes(' ') && !cell.includes('_') && !/^\d+$/.test(cell) && !cell.includes('.')) {
                                     descripcion = cell;
                                     break;
                                 }
                             }
-                        }
+                            if (!descripcion) descripcion = cells[3] || "";
 
-                        // Extraer cantidad y unidad de medida
-                        let cantidad = 0;
-                        for (let i = 0; i < cells.length; i++) {
-                            let cellText = cells[i].toUpperCase();
-                            if (cellText.includes("CA") || cellText.includes("UN") || cellText === "N/S") {
-                                let match = cellText.match(/([\d\.,]+)\s*(CA|UN)/i);
-                                if (match) {
-                                    cantidad = parsearCantidad(match[1]);
-                                    unidadMedida = cellText.includes("UN") ? "UN" : "CA";
-                                } else if (i > 0) {
-                                    let prevVal = parsearCantidad(cells[i-1]);
-                                    if (prevVal > 0) {
-                                        cantidad = prevVal;
-                                        if (cells[i].toUpperCase().includes("UN")) unidadMedida = "UN";
+                            let cantidad = 0;
+                            for (let i = 0; i < cells.length; i++) {
+                                let cellText = cells[i].toUpperCase();
+                                if (cellText.includes("CA") || cellText.includes("UN")) {
+                                    let match = cellText.match(/([\d\.,]+)\s*(CA|UN)/i);
+                                    if (match) {
+                                        cantidad = parsearCantidad(match[1]);
+                                        unidadMedida = cellText.includes("UN") ? "UN" : "CA";
+                                    } else if (i > 0) {
+                                        let prevVal = parsearCantidad(cells[i-1]);
+                                        if (prevVal > 0) {
+                                            cantidad = prevVal;
+                                            if (cells[i].toUpperCase().includes("UN")) unidadMedida = "UN";
+                                        }
                                     }
+                                    break;
                                 }
-                                break;
                             }
-                        }
 
-                        if (articulo && cantidad > 0) {
-                            if (unidadMedida === 'CA') totalCajas += cantidad; else totalUnidades += cantidad;
-                            // Si es N/S, la ubicación y cancha van en blanco
-                            let ubicacionFinal = esNS ? "" : ultimaUbicacion;
-                            datosTemporales.push({
-                                "Carga": cargaNro, 
-                                "ART": articulo, 
-                                "Descripción": descripcion, 
-                                "PM/PH": "picking", 
-                                "Desc UM": unidadMedida, 
-                                "Cantidad": cantidad,
-                                "Ubicacion": formatearUbicacion(ubicacionFinal), 
-                                "Cancha": calcularCancha(ubicacionFinal)
-                            });
+                            if (articulo && cantidad > 0) {
+                                if (unidadMedida === 'CA') totalCajas += cantidad; else totalUnidades += cantidad;
+                                datosTemporales.push({
+                                    "Carga": cargaNro, 
+                                    "ART": articulo, 
+                                    "Descripción": descripcion, 
+                                    "PM/PH": "picking", 
+                                    "Desc UM": unidadMedida, 
+                                    "Cantidad": cantidad,
+                                    "Ubicacion": formatearUbicacion(contextoUbicacion), 
+                                    "Cancha": calcularCancha(contextoUbicacion)
+                                });
+                            }
                         }
                     }
                 });
