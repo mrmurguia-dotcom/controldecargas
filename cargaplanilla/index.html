@@ -302,7 +302,7 @@
             reader.readAsText(file, "ISO-8859-1");
         });
 
-        // --- PROCESAMIENTO MULTIORDEN (CON ORDEN EXACTO N/S) ---
+        // --- PROCESAMIENTO MULTIORDEN (LÓGICA BASE LIMPIA CON COMPENSACIÓN EXPLÍCITA N/S) ---
         archivosMultiAcumulados.forEach(file => {
             const reader = new FileReader();
             reader.onload = (e) => {
@@ -330,17 +330,21 @@
 
                     if (esAbastecimiento) return;
 
-                    let cells = Array.from(tr.cells).map(td => td.innerText.trim()).filter(Boolean);
+                    let cells = Array.from(tr.cells).map(td => td.innerText.trim());
+                    let nonEmpties = cells.filter(Boolean);
+                    if (nonEmpties.length === 0) return;
+
                     if (upperText.includes("CARGA:")) { 
                         const m = text.match(/CARGA:\s*(\d+)/i); 
                         if (m) cargaNro = m[1]; 
                     }
 
-                    if (cells.length > 0 && cells[0].includes('.')) {
-                        contextoUbicacion = cells[0];
+                    // Actualizar contexto de ubicación si la celda tiene punto
+                    if (nonEmpties[0].includes('.')) {
+                        contextoUbicacion = nonEmpties[0];
                     }
 
-                    let rowJoined = cells.join(" ").toUpperCase();
+                    let rowJoined = nonEmpties.join(" ").toUpperCase();
                     if ((rowJoined.includes(" CA") || rowJoined.includes(" UN") || upperText.includes("N/S")) && 
                         !upperText.includes("TOTAL SURTIDO") && !upperText.includes("ARTÍCULO") && !upperText.includes("UBICACIÓN") && !upperText.includes("CANTIDAD POR UNIDAD")) {
                         
@@ -348,31 +352,31 @@
                         let descripcion = "";
                         let unidadMedida = "CA";
                         let cantidad = 0;
-                        let esNS = upperText.includes("N/S");
+                        let esNS = upperText.includes("N/S") || nonEmpties.includes("N/S");
 
                         if (esNS) {
-                            // Estructura N/S exacta: [0] Articulo, [1] Descripcion, [2] Cliente, [3] Orden, [4] Linea, [5] Cantidad, [6] UM, [7] N/S
-                            let validCells = Array.from(tr.cells).map(td => td.innerText.trim()).filter(val => val !== "");
-                            
-                            articulo = validCells[0] || "";
-                            descripcion = validCells[1] || "";
-                            
-                            // Buscar la celda que contiene la unidad de medida (CA o UN) para extraer la cantidad exacta anterior
-                            for (let i = 0; i < validCells.length; i++) {
-                                let cText = validCells[i].toUpperCase();
-                                if (cText === "CA" || cText === "UN" || cText.includes("CA") || cText.includes("UN")) {
-                                    if (cText === "CA" || cText === "UN") {
-                                        unidadMedida = cText;
-                                        cantidad = parsearCantidad(validCells[i-1]);
-                                    } else {
-                                        let match = cText.match(/([\d\.,]+)\s*(CA|UN)/i);
-                                        if (match) {
-                                            cantidad = parsearCantidad(match[1]);
-                                            unidadMedida = match[2].toUpperCase();
-                                        }
+                            // Compensación exacta para línea N/S:
+                            // Ubicación, Cancha y Lote quedan en blanco, saltando limpiamente la estructura
+                            articulo = nonEmpties[0] || "";
+                            descripcion = nonEmpties[1] || "";
+
+                            for (let i = 0; i < nonEmpties.length; i++) {
+                                let cText = nonEmpties[i].toUpperCase();
+                                if (cText === "CA" || cText === "UN") {
+                                    unidadMedida = cText;
+                                    cantidad = parsearCantidad(nonEmpties[i-1]);
+                                    break;
+                                } else if (cText.includes("CA") || cText.includes("UN")) {
+                                    let match = cText.match(/([\d\.,]+)\s*(CA|UN)/i);
+                                    if (match) {
+                                        cantidad = parsearCantidad(match[1]);
+                                        unidadMedida = match[2].toUpperCase();
                                     }
                                     break;
                                 }
+                            }
+                            if (cantidad === 0 && nonEmpties.length >= 6) {
+                                cantidad = parsearCantidad(nonEmpties[5]);
                             }
 
                             if (articulo && cantidad > 0) {
@@ -384,33 +388,33 @@
                                     "PM/PH": "picking", 
                                     "Desc UM": unidadMedida, 
                                     "Cantidad": cantidad,
-                                    "Ubicacion": "", 
-                                    "Cancha": ""     
+                                    "Ubicacion": "", // En blanco por ser N/S
+                                    "Cancha": ""     // En blanco por ser N/S
                                 });
                             }
                         } else {
-                            // Fila Normal de Multiorden
-                            articulo = cells[1] || "";
-                            for (let cell of cells) {
+                            // Fila Normal Multiorden
+                            articulo = nonEmpties[1] || "";
+                            for (let cell of nonEmpties) {
                                 if (cell.length > 5 && cell.includes(' ') && !cell.includes('_') && !/^\d+$/.test(cell) && !cell.includes('.')) {
                                     descripcion = cell;
                                     break;
                                 }
                             }
-                            if (!descripcion) descripcion = cells[3] || "";
+                            if (!descripcion) descripcion = nonEmpties[3] || "";
 
-                            for (let i = 0; i < cells.length; i++) {
-                                let cellText = cells[i].toUpperCase();
-                                if (cellText.includes("CA") || cellText.includes("UN")) {
-                                    let match = cellText.match(/([\d\.,]+)\s*(CA|UN)/i);
+                            for (let i = 0; i < nonEmpties.length; i++) {
+                                let cText = nonEmpties[i].toUpperCase();
+                                if (cText.includes("CA") || cText.includes("UN")) {
+                                    let match = cText.match(/([\d\.,]+)\s*(CA|UN)/i);
                                     if (match) {
                                         cantidad = parsearCantidad(match[1]);
-                                        unidadMedida = cellText.includes("UN") ? "UN" : "CA";
+                                        unidadMedida = match[2].toUpperCase();
                                     } else if (i > 0) {
-                                        let prevVal = parsearCantidad(cells[i-1]);
+                                        let prevVal = parsearCantidad(nonEmpties[i-1]);
                                         if (prevVal > 0) {
                                             cantidad = prevVal;
-                                            if (cells[i].toUpperCase().includes("UN")) unidadMedida = "UN";
+                                            if (cText.includes("UN")) unidadMedida = "UN";
                                         }
                                     }
                                     break;
