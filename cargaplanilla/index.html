@@ -51,7 +51,7 @@
 <body>
 
 <div class="container">
-    <h2 class="header-title">📊 Extractor JDE a Excel </h2>
+    <h2 class="header-title">📊 Extractor JDE a Excel (Multireporte)</h2>
     
     <div class="upload-grid">
         <!-- Bloque Estándar -->
@@ -302,7 +302,7 @@
             reader.readAsText(file, "ISO-8859-1");
         });
 
-        // --- PROCESAMIENTO MULTIORDEN ROBUSTO (CON DESCRIPCIÓN CORREGIDA) ---
+        // --- PROCESAMIENTO MULTIORDEN CON MEMORIA DE CONTEXTO SECUENCIAL ---
         archivosMultiAcumulados.forEach(file => {
             const reader = new FileReader();
             reader.onload = (e) => {
@@ -315,7 +315,10 @@
                 let totalUnidades = 0;
                 let cargaNro = "S/C";
                 let esAbastecimiento = false;
+                
                 let ultimaUbicacion = "";
+                let ultimoArticulo = "";
+                let ultimaDescripcion = "";
 
                 rows.forEach(tr => {
                     let text = tr.innerText.trim();
@@ -336,6 +339,7 @@
                         if (m) cargaNro = m[1]; 
                     }
 
+                    // 1. Capturar ubicación si la fila la trae
                     for (let cell of cells) {
                         if (/^\d{2}\.[0-9A-Z]+\.\d{3}\.\d$/i.test(cell) || (cell.includes('.') && cell.length >= 8 && /\d/.test(cell))) {
                             ultimaUbicacion = cell;
@@ -343,41 +347,29 @@
                         }
                     }
 
+                    // 2. Capturar artículo si la fila lo trae
+                    for (let cell of cells) {
+                        if (/^\d{5}$/.test(cell)) {
+                            ultimoArticulo = cell;
+                            break;
+                        }
+                    }
+
+                    // 3. Capturar descripción si la fila la trae
+                    for (let cell of cells) {
+                        if (cell.length > 5 && cell.includes(' ') && !cell.includes('_') && !/^\d+$/.test(cell) && !cell.includes('.') && !cell.toUpperCase().includes('N/S') && !cell.toUpperCase().includes('SURTIDO')) {
+                            ultimaDescripcion = cell;
+                            break;
+                        }
+                    }
+
+                    // 4. Si es una línea de detalle o línea N/S, procesamos usando la memoria de contexto
                     let rowJoined = cells.join(" ").toUpperCase();
                     if ((rowJoined.includes(" CA") || rowJoined.includes(" UN") || upperText.includes("N/S")) && 
                         !upperText.includes("TOTAL SURTIDO") && !upperText.includes("ARTÍCULO") && !upperText.includes("UBICACIÓN") && !upperText.includes("CANTIDAD POR UNIDAD")) {
                         
-                        let articulo = "";
-                        let descripcion = "";
                         let unidadMedida = rowJoined.includes(" UN") ? "UN" : "CA";
                         let esNS = upperText.includes("N/S");
-
-                        for (let cell of cells) {
-                            if (/^\d{5}$/.test(cell)) {
-                                articulo = cell;
-                                break;
-                            }
-                        }
-                        if (!articulo) {
-                            let found = cells.find(c => /^\d{5,}$/.test(c));
-                            if (found) articulo = found;
-                        }
-
-                        // DESCRIPCIÓN CORREGIDA: Exige que sea un texto con espacios y sin guiones bajos (evita códigos de lote)
-                        for (let cell of cells) {
-                            if (cell.length > 5 && cell.includes(' ') && !cell.includes('_') && !/^\d+$/.test(cell) && !cell.includes('.')) {
-                                descripcion = cell;
-                                break;
-                            }
-                        }
-                        if (!descripcion) {
-                            for (let cell of cells) {
-                                if (cell.length > 5 && !cell.includes('_') && !/^\d+$/.test(cell) && !cell.includes('.')) {
-                                    descripcion = cell;
-                                    break;
-                                }
-                            }
-                        }
 
                         let cantidad = 0;
                         for (let i = 0; i < cells.length; i++) {
@@ -398,13 +390,13 @@
                             }
                         }
 
-                        if (articulo && cantidad > 0) {
+                        if (ultimoArticulo && cantidad > 0) {
                             if (unidadMedida === 'CA') totalCajas += cantidad; else totalUnidades += cantidad;
                             let ubicacionFinal = esNS ? "" : ultimaUbicacion;
                             datosTemporales.push({
                                 "Carga": cargaNro, 
-                                "ART": articulo, 
-                                "Descripción": descripcion, 
+                                "ART": ultimoArticulo, 
+                                "Descripción": ultimaDescripcion, 
                                 "PM/PH": "picking", 
                                 "Desc UM": unidadMedida, 
                                 "Cantidad": cantidad,
